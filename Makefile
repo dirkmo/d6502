@@ -1,23 +1,23 @@
 .PHONY: all clean
 
 CFLAGS=-Wall -g -Wno-unused-function -Wfatal-errors
-INC=
-LDFLAGS=
+INC=-Id6502
+LDFLAGS=-lSDL2
 
 SRCS=$(wildcard *.c)
 OBJS=$(SRCS:.c=.o)
 
-BIN=d6502
+BIN=dnes
 
-all: $(OBJS) test.bin
-	gcc $(OBJS) $(LDFLAGS) -o $(BIN)
+all: $(OBJS) d6502.a
+	gcc $(OBJS) d6502/d6502.a $(LDFLAGS) -o $(BIN)
 
 %.o: %.c
 	gcc $(CFLAGS) $(INC) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) $(BIN) test.bin
+	make -C d6502/ clean
+	rm -f $(OBJS) $(BIN)
 
-test.bin: test.asm
-	ca65 test.asm
-	ld65 test.o -o test.bin -t none
+d6502.a:
+	make -C d6502

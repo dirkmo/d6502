@@ -1,38 +1,63 @@
 #include "d6502.h"
 #include "instruction_table.h"
+#include "ppu.h"
+#include "cartridge.h"
+#include "inesheader.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <SDL2/SDL.h>
 
 uint8_t memory[0x10000];
+
+uint8_t ram_internal[0x800];
+
+SDL_Window *win = NULL;
+SDL_Renderer *ren = NULL;
+
+
 
 int EMULATION_END = 0;
 int run_count = 0;
 
+
 void writebus(uint16_t addr, uint8_t dat) {
-    memory[addr] = dat;
+    switch(addr) {
+        case 0x0000 ... 0x1fff: // internal ram
+            ram_internal[addr & 0x7ff] = dat;
+            break;
+        case 0x2000 ... 0x3fff: // PPU
+            ppu_write(addr & 0x7, dat);
+            break;
+        case 0x4000 ... 0x401f: // APU + IO
+            break;
+        case 0x6000 ... 0xffff: // cartridge
+            cartridge_write(addr, dat);
+            break;
+        default:;
+    }
 }
 
 uint8_t readbus(uint16_t addr) {
-    return memory[addr];
+    switch(addr) {
+        case 0x0000 ... 0x1fff: // internal ram
+            return ram_internal[addr];
+        case 0x2000 ... 0x3fff: // PPU
+            return ppu_read(addr & 0x7);
+        case 0x4000 ... 0x401f: // APU + IO
+            return 0;
+        case 0x6000 ... 0xffff: // cartridge
+            return cartridge_read(addr);
+        default: ;
+    }
+    return 0;
 }
 
-void load_program(uint16_t addr, const char *fn) {
-    FILE *f = fopen(fn, "r");
-    int i = addr;
-    while(!feof(f) && i < sizeof(memory)) {
-        if (fread(memory + i, 1, 1, f) > 0) {
-            // printf("%02X ", memory[i]);
-            i++;
-        } else {
-            break;
-        }
-    }
-    //printf("\n");
-    fclose(f);
-}
+
 
 void print_regs(d6502_t *cpu) {
-    printf("st: %02X (%c%c-%c%c%c%c%c)\n", cpu->st,
+    char status[32];
+    sprintf(status, "st: %02X (%c%c-%c%c%c%c%c)", cpu->st,
         cpu->st & 0x80 ? 'N' : 'n',
         cpu->st & 0x40 ? 'V' : 'v',
         cpu->st & 0x10 ? 'B' : 'b',
@@ -40,7 +65,7 @@ void print_regs(d6502_t *cpu) {
         cpu->st & 0x04 ? 'I' : 'i',
         cpu->st & 0x02 ? 'Z' : 'z',
         cpu->st & 0x01 ? 'C' : 'c');
-    printf("A: %02X, X: %02X, Y: %02X, SP: %02X, PC: %02X\n", cpu->a, cpu->x, cpu->y, cpu->sp, cpu->pc);
+    printf("A: %02X, X: %02X, Y: %02X, SP: %02X, PC: %02X, %s\n", cpu->a, cpu->x, cpu->y, cpu->sp, cpu->pc, status);
 }
 
 void memory_dump(uint16_t addr, int cols, int rows) {
@@ -94,16 +119,23 @@ void get_raw_instruction(d6502_t *cpu, char raw[]) {
     }
 }
 
+void onExit(void) {
+    SDL_Quit();
+}
+
 int main(int argc, char *argv[]) {
-    char buf[256];
-    load_program(0xc000, "nestest/nestest.bin");
+    if(ppu_init_sdl() < 0) {
+        return 1;
+    }
+    atexit(onExit);
+    cartridge_loadROM("rom/bg.nes");
+
+
     d6502_t cpu;
     d6502_init(&cpu);
     cpu.read = readbus;
     cpu.write = writebus;
     
-    memory[0xFFFC] = 0;
-    memory[0xFFFD] = 0xc0;
     d6502_reset(&cpu);
 
     FILE *log = fopen("log.txt", "w");
@@ -112,6 +144,7 @@ int main(int argc, char *argv[]) {
     char asmcode[32];
     char raw[16];
     char logstr[128];
+    char buf[256];
     while( EMULATION_END == 0) {
         d6502_disassemble(&cpu, cpu.pc, asmcode);
         get_raw_instruction(&cpu, raw);
@@ -138,5 +171,11 @@ int main(int argc, char *argv[]) {
         instruction_counter++; // instruction counter
     }
     fclose(log);
+
+    cartridge_cleanup();
+
+	SDL_DestroyRenderer(ren);
+	SDL_DestroyWindow(win);
+    SDL_Quit();
     return 0;
 }

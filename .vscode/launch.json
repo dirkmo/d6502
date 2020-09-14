@@ -8,7 +8,7 @@
             "name": "(gdb) Starten",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/d6502",
+            "program": "${workspaceFolder}/dnes",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
