@@ -12,10 +12,6 @@ uint8_t memory[0x10000];
 
 uint8_t ram_internal[0x800];
 
-SDL_Window *win = NULL;
-SDL_Renderer *ren = NULL;
-
-
 
 int EMULATION_END = 0;
 int run_count = 0;
@@ -128,7 +124,36 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     atexit(onExit);
-    cartridge_loadROM("rom/bg.nes");
+    cartridge_loadROM("rom/Tetris.nes");
+
+    void draw(void);
+    draw();
+
+    bool quit = false;
+    SDL_Event e;
+    while(!quit) {
+        while(SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) {
+                quit = true;
+            }
+            if (e.type == SDL_KEYDOWN) {
+            }
+            if (e.type == SDL_WINDOWEVENT ) {
+                if (e.window.event == SDL_WINDOWEVENT_RESIZED || e.window.event == SDL_WINDOWEVENT_SHOWN) {
+                    draw();
+                }
+                if (e.window.event == SDL_WINDOWEVENT_EXPOSED ) {
+                    draw();
+                }
+                if (e.window.event == SDL_WINDOWEVENT_CLOSE) {
+                    quit = true;
+                }
+            }
+        }
+    }
+    cartridge_cleanup();
+    SDL_Quit();
+    return 0;
 
 
     d6502_t cpu;
@@ -172,10 +197,5 @@ int main(int argc, char *argv[]) {
     }
     fclose(log);
 
-    cartridge_cleanup();
-
-	SDL_DestroyRenderer(ren);
-	SDL_DestroyWindow(win);
-    SDL_Quit();
     return 0;
 }

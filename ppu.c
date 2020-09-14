@@ -30,7 +30,8 @@ uint8_t getTilePixel(const uint8_t *rawtile, uint8_t idx) {
     int bitidx = idx % 8;
     int byteidx = (idx / 8);
     uint8_t b1 = (rawtile[byteidx] >> (7-bitidx)) & 1;
-    uint8_t b2 = (rawtile[byteidx+1] >> (7-bitidx)) & 1;
+    uint8_t b2 = (rawtile[byteidx+8] >> (7-bitidx)) & 1;
+
     return b1 | (b2 << 1);
 }
 
@@ -49,7 +50,7 @@ const uint8_t *getTile(uint8_t chr_idx, uint8_t idx) {
 }
 
 void draw(void) {
-    uint8_t colors[] = { 5, 0x10, 0x26, 0x30};
+    uint8_t colors[] = { 0xf, 0x27, 0x2a, 0x2b};
     const uint8_t *tile;
     for( int i = 0; i < 256; i++ ) {
         tile = getTile(0, i);

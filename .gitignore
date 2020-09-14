@@ -1,4 +1,5 @@
 *.o
+*.a
 test.bin
 dnes
 rom/*.nes
