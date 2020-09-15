@@ -22,7 +22,7 @@ uint8_t cartridge_read(uint16_t addr) {
     uint8_t dat = 0;
     switch(addr) {
         case 0x8000 ... 0xbfff:
-            break;
+            dat = cartridge.rom_prg16k[addr - cartridge.header.nCHRROM8k == 1 ? 0xc000 : 0x8000];
         case 0xC000 ... 0xffff:
             dat = cartridge.rom_prg16k[addr - 0xc000];
             break;

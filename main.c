@@ -124,37 +124,30 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     atexit(onExit);
-    cartridge_loadROM("rom/Tetris.nes");
+    cartridge_loadROM("rom/bg.nes");
 
-    void draw(void);
-    draw();
-
-    bool quit = false;
-    SDL_Event e;
-    while(!quit) {
-        while(SDL_PollEvent(&e)) {
-            if (e.type == SDL_QUIT) {
-                quit = true;
-            }
-            if (e.type == SDL_KEYDOWN) {
-            }
-            if (e.type == SDL_WINDOWEVENT ) {
-                if (e.window.event == SDL_WINDOWEVENT_RESIZED || e.window.event == SDL_WINDOWEVENT_SHOWN) {
-                    draw();
-                }
-                if (e.window.event == SDL_WINDOWEVENT_EXPOSED ) {
-                    draw();
-                }
-                if (e.window.event == SDL_WINDOWEVENT_CLOSE) {
-                    quit = true;
-                }
-            }
-        }
-    }
-    cartridge_cleanup();
-    SDL_Quit();
-    return 0;
-
+    // bool quit = false;
+    // SDL_Event e;
+    // while(!quit) {
+    //     while(SDL_PollEvent(&e)) {
+    //         if (e.type == SDL_QUIT) {
+    //             quit = true;
+    //         }
+    //         if (e.type == SDL_KEYDOWN) {
+    //         }
+    //         if (e.type == SDL_WINDOWEVENT ) {
+    //             if (e.window.event == SDL_WINDOWEVENT_RESIZED || e.window.event == SDL_WINDOWEVENT_SHOWN) {
+    //                 draw();
+    //             }
+    //             if (e.window.event == SDL_WINDOWEVENT_EXPOSED ) {
+    //                 draw();
+    //             }
+    //             if (e.window.event == SDL_WINDOWEVENT_CLOSE) {
+    //                 quit = true;
+    //             }
+    //         }
+    //     }
+    // }
 
     d6502_t cpu;
     d6502_init(&cpu);
@@ -192,7 +185,12 @@ int main(int argc, char *argv[]) {
         fflush(log);
 
         // execute instruction
-        while(d6502_tick(&cpu));
+        while(1) {
+            ppu_tick();
+            if( d6502_tick(&cpu) == 0 ) {
+                break;
+            }
+        }
         instruction_counter++; // instruction counter
     }
     fclose(log);
