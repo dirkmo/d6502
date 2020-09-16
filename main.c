@@ -14,7 +14,8 @@ uint8_t ram_internal[0x800];
 
 
 int EMULATION_END = 0;
-int run_count = 0;
+uint32_t run_count = 0;
+uint16_t breakpoint = 0;
 
 
 void writebus(uint16_t addr, uint8_t dat) {
@@ -48,8 +49,6 @@ uint8_t readbus(uint16_t addr) {
     }
     return 0;
 }
-
-
 
 void print_regs(d6502_t *cpu) {
     char status[32];
@@ -93,8 +92,15 @@ void handle(d6502_t *cpu, const char *cmd) {
         memory_dump(addr, 16, 8);
     } else if(strstr(cmd, "regs")) {
         print_regs(cpu);
-    } else if(strstr(cmd, "run") != 0 && sscanf(cmd, "run %d", &addr) == 1) {
-        run_count = addr;
+    } else if(strstr(cmd, "run") != 0 ) {
+        int argc = sscanf(cmd, "run %d", &addr);
+        if (argc == 1) {
+            run_count = addr;
+        } else {
+            run_count = 0xFFFFffff;
+        }
+    } else if(strstr(cmd, "break") != 0 && sscanf(cmd, "break %x", &addr) == 1) {
+        breakpoint = addr;
     } else if(strlen(cmd) > 0) {
         printf("Unknown command '%s'\n", cmd);
     }
@@ -169,7 +175,13 @@ int main(int argc, char *argv[]) {
         print_regs(&cpu);
         do {
             printf("\n%d $%04X: %s   %s> ", instruction_counter, cpu.pc, raw, asmcode);
-            if( instruction_counter < run_count ) break;
+            if (breakpoint == 0) {
+                if( instruction_counter < run_count ) break;
+            } else if (breakpoint != cpu.pc) {
+                break;
+            } else {
+                breakpoint = 0;
+            }
             buf[0] = 0;
             read_line(buf, sizeof(buf));
             handle(&cpu, buf);
@@ -184,11 +196,16 @@ int main(int argc, char *argv[]) {
         fwrite(logstr, strlen(logstr), 1, log);
         fflush(log);
 
-        // execute instruction
+        int clock = 0;
         while(1) {
+            // ppu runs 3x faster than the cpu
             ppu_tick();
-            if( d6502_tick(&cpu) == 0 ) {
-                break;
+            clock++;
+            if((clock%3) == 0) {
+                // execute instruction
+                if( d6502_tick(&cpu) == 0 ) {
+                    break;
+                }
             }
         }
         instruction_counter++; // instruction counter

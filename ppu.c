@@ -1,3 +1,5 @@
+// https://wiki.nesdev.com/w/index.php/PPU_rendering
+//
 #include "ppu.h"
 
 #include <assert.h>
@@ -8,6 +10,21 @@
 
 #define W 320
 #define H 200
+#define VBLANK 0x80
+#define FRAME_W 341
+#define FRAME_H 262
+#define TICKS_PER_FRAME (FRAME_W * FRAME_H)
+#define PATTERN_TABLE_0 0x0000
+#define PATTERN_TABLE_1 0x1000
+#define NAME_TABLE_0 0x2000
+#define NAME_TABLE_1 0x2400
+#define NAME_TABLE_2 0x2800
+#define NAME_TABLE_3 0x2c00
+#define ATTR_TABLE_0 (NAME_TABLE_0 + 0x3c0)
+#define ATTR_TABLE_1 (NAME_TABLE_1 + 0x3c0)
+#define ATTR_TABLE_2 (NAME_TABLE_2 + 0x3c0)
+#define ATTR_TABLE_3 (NAME_TABLE_3 + 0x3c0)
+
 
 static SDL_Window *win = NULL;
 static SDL_Renderer *ren = NULL;
@@ -150,7 +167,7 @@ uint8_t ppu_read(uint8_t addr) {
             break;
         case 2: // PPUSTATUS, PPU Status Register
             val = ppu_status;
-            ppu_status &= 0x7f;
+            ppu_status &= ~VBLANK;
             break;
         case 3: // OAMADDR, SPR-RAM Address Register
             break;
@@ -170,8 +187,50 @@ uint8_t ppu_read(uint8_t addr) {
     return val;
 }
 
+const uint8_t *getNameTable(void) {
+    uint16_t addr = NAME_TABLE_0 | ((ppu_ctrl1 & 0x3) << 10);
+    return (uint8_t*)&vram[addr];
+}
+
+const uint8_t *getAttributeTable(void) {
+    return getNameTable() + 0x3c0;
+}
+
+const uint8_t *getSpritePatternTable(void) {
+    uint16_t addr = (ppu_ctrl1 & 0x08) ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
+    return (uint8_t*)&vram[addr];
+}
+
+const uint8_t *getBgPatternTable(void) {
+    uint16_t addr = (ppu_ctrl1 & 0x10) ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
+    return (uint8_t*)&vram[addr];
+}
+
 
 void ppu_tick(void) {
-    ppu_status |= 0x80;
+    uint32_t frame_pixel_idx = tick % TICKS_PER_FRAME;
+    uint32_t y = frame_pixel_idx / FRAME_W;
+    uint32_t x = frame_pixel_idx % FRAME_W;
+    uint8_t attr = 0;
+
+    if (x == 0) {
+        // beginning of line
+        if ( y == 0 ) {
+            ppu_status &= ~VBLANK;
+        } else if ( y == 240 ) {
+            ppu_status |= VBLANK;
+        }
+    }
+
+    if (x < 256) {
+        // Visible pixels
+        if ((x % 8) == 0) {
+            // fetch tile / attribute data
+            uint8_t byte_idx = (y/32)*8 + x / 32;
+            attr = getAttributeTable()[byte_idx];
+        }
+    } else {
+        // HBLANK
+    }
     tick++;
 }
