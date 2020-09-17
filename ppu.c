@@ -8,8 +8,8 @@
 #include "palette.h"
 #include "cartridge.h"
 
-#define W 320
-#define H 200
+#define WIN_W 800
+#define WIN_H 600
 #define VBLANK 0x80
 #define FRAME_W 341
 #define FRAME_H 262
@@ -30,7 +30,7 @@ static SDL_Window *win = NULL;
 static SDL_Renderer *ren = NULL;
 static SDL_Texture *tex = NULL;
 
-static uint8_t pixels[W*H*3] = { 0 };
+static uint8_t pixels[WIN_W*WIN_H*3] = { 0 };
 
 uint8_t ppu_ctrl1 = 0;
 uint8_t ppu_ctrl2 = 0;
@@ -46,7 +46,7 @@ static uint32_t tick = 0;
 
 
 void setpixel( int x, int y, uint8_t  r, uint8_t g, uint8_t b ) {
-    int p = (y * W + x) * 3;
+    int p = (y * WIN_W + x) * 3;
     if( p+2 >= sizeof(pixels)) {
         printf("x: %d, y: %d\n", x, y);
         assert(p+2 < sizeof(pixels));
@@ -86,12 +86,12 @@ void draw(void) {
         drawTile(tile, colors, (i%16)*8, (i/16)*8);
     }
 
-    SDL_UpdateTexture(tex, NULL, pixels, W*3);
+    SDL_UpdateTexture(tex, NULL, pixels, WIN_W*3);
     SDL_RenderCopy(ren, tex, NULL, NULL);
     SDL_RenderPresent(ren);
  }
 
-uint8_t getAttribute(uint8_t *table, uint8_t x, uint8_t y) {
+uint8_t getAttribute(const uint8_t *table, uint8_t x, uint8_t y) {
     // 256x240, 8 Attribute bytes per line
 
     // +------------+------------+
@@ -127,7 +127,7 @@ int ppu_init_sdl(void) {
     win = SDL_CreateWindow("dNES", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800, 600, SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
     ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-    tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, W, H);
+    tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, WIN_W, WIN_H);
     return 0;
 }
 
@@ -202,21 +202,27 @@ const uint8_t *getSpritePatternTable(void) {
 }
 
 const uint8_t *getBgPatternTable(void) {
-    uint16_t addr = (ppu_ctrl1 & 0x10) ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
-    return (uint8_t*)&vram[addr];
+    // uint16_t addr = (ppu_ctrl1 & 0x10) ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
+    // return (uint8_t*)&vram[addr];
+    return (uint8_t*) cartridge_getCHR8k((ppu_ctrl1 & 0x10) ? 1 : 0);
 }
 
 
 void ppu_tick(void) {
+    static uint16_t pixel_count = 0;
+    static const uint8_t *tile;
     uint32_t frame_pixel_idx = tick % TICKS_PER_FRAME;
     uint32_t y = frame_pixel_idx / FRAME_W;
     uint32_t x = frame_pixel_idx % FRAME_W;
     uint8_t attr = 0;
+    uint8_t pixel = 0;
+
 
     if (x == 0) {
         // beginning of line
         if ( y == 0 ) {
             ppu_status &= ~VBLANK;
+            pixel_count = 0;
         } else if ( y == 240 ) {
             ppu_status |= VBLANK;
         }
@@ -225,10 +231,19 @@ void ppu_tick(void) {
     if (x < 256) {
         // Visible pixels
         if ((x % 8) == 0) {
-            // fetch tile / attribute data
-            uint8_t byte_idx = (y/32)*8 + x / 32;
-            attr = getAttributeTable()[byte_idx];
+            // attribute data
+            // uint8_t byte_idx = (y/32)*8 + x / 32;
+            // attr = getAttributeTable()[byte_idx];
+            
+            attr = attr << 2;
+            // nametable
+            uint8_t tile_idx = getNameTable()[pixel_count];
+            pixel_count++;
+            // tile
+            tile = getBgPatternTable() + tile_idx;
         }
+        pixel = getAttribute( getAttributeTable(), x, y) | getTilePixel(tile, 8*(y%8)+(x%8));
+        setpixel(x, y, palette[pixel+2], palette[pixel+1], palette[pixel]);
     } else {
         // HBLANK
     }
