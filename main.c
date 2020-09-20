@@ -162,11 +162,9 @@ int main(int argc, char *argv[]) {
 
     writebus(PPUADDR, NTABLE0 >> 8);
     writebus(PPUADDR, NTABLE0 & 0xff);
-    // for( int i = 0; i<256; i++) {
-    //     writebus(PPUDATA, i & 0xff);
-    // }
-    writebus(PPUADDR, 1);
-
+    for( int i = 0; i<256; i++) {
+        writebus(PPUDATA, i+1);
+    }
 
     writebus(PPUMASK, 0x0a);
     writebus(PPUCTRL, 0x90);

@@ -224,13 +224,14 @@ void ppu_tick(void) {
     if (x < FRAME_W) {
         if (y < FRAME_H) {
             // Visible pixels
-            if (relx == 0 && rely == 0) {
+            if (relx == 0) {
                 // upperleft of tile
-                // attr = getAttribute( getAttributeTable(), x, y);
                 uint8_t tile_idx = getNameTableEntry(getNameTable(), x, y);
                 bgtile = getTile((ppu_ctrl & 0x10) ? 1 : 0, tile_idx);
-                printf("%dx%d Tile %d\n", x, y, tile_idx);
-                // print_tile(bgtile);
+                // printf("%dx%d Tile %d\n", x, y, tile_idx);
+                if (x % 16 == 0) {
+                    attr = getAttribute( getAttributeTable(), x, y);
+                }
             }
             uint8_t pixel = attr | getTilePixel(bgtile, 8*rely+relx);
             setpixel(x, y, pixel);
