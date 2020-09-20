@@ -8,6 +8,15 @@
 #include <stdlib.h>
 #include <SDL2/SDL.h>
 
+
+#define WIN_W 800
+#define WIN_H 600
+
+static SDL_Window *win = NULL;
+static SDL_Renderer *ren = NULL;
+static SDL_Texture *tex = NULL;
+
+
 uint8_t memory[0x10000];
 
 uint8_t ram_internal[0x800];
@@ -16,6 +25,24 @@ uint8_t ram_internal[0x800];
 int EMULATION_END = 0;
 uint32_t run_count = 0;
 uint16_t breakpoint = 0;
+
+int init_sdl(void) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+        return -1;
+    }
+    win = SDL_CreateWindow("dNES", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, FRAME_W*5, FRAME_H*5, SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
+    ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
+    tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, FRAME_W, FRAME_H);
+    return 0;
+}
+
+void draw(void) {
+    SDL_UpdateTexture(tex, NULL, ppu_getFrameBuffer(), FRAME_W*3);
+    // const SDL_Rect dst = {.x = 0, .y = 0, .w = FRAME_W, .h = FRAME_H };
+    SDL_RenderCopy(ren, tex, NULL, NULL);
+    SDL_RenderPresent(ren);
+ }
 
 
 void writebus(uint16_t addr, uint8_t dat) {
@@ -126,34 +153,53 @@ void onExit(void) {
 }
 
 int main(int argc, char *argv[]) {
-    if(ppu_init_sdl() < 0) {
+    if(init_sdl() < 0) {
         return 1;
     }
+    draw();
     atexit(onExit);
     cartridge_loadROM("rom/bg.nes");
 
-    // bool quit = false;
-    // SDL_Event e;
-    // while(!quit) {
-    //     while(SDL_PollEvent(&e)) {
-    //         if (e.type == SDL_QUIT) {
-    //             quit = true;
-    //         }
-    //         if (e.type == SDL_KEYDOWN) {
-    //         }
-    //         if (e.type == SDL_WINDOWEVENT ) {
-    //             if (e.window.event == SDL_WINDOWEVENT_RESIZED || e.window.event == SDL_WINDOWEVENT_SHOWN) {
-    //                 draw();
-    //             }
-    //             if (e.window.event == SDL_WINDOWEVENT_EXPOSED ) {
-    //                 draw();
-    //             }
-    //             if (e.window.event == SDL_WINDOWEVENT_CLOSE) {
-    //                 quit = true;
-    //             }
-    //         }
-    //     }
+    writebus(PPUADDR, NTABLE0 >> 8);
+    writebus(PPUADDR, NTABLE0 & 0xff);
+    // for( int i = 0; i<256; i++) {
+    //     writebus(PPUDATA, i & 0xff);
     // }
+    writebus(PPUADDR, 1);
+
+
+    writebus(PPUMASK, 0x0a);
+    writebus(PPUCTRL, 0x90);
+
+    bool quit = false;
+    SDL_Event e;
+    while (!quit) {
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) {
+                quit = true;
+            }
+            if (e.type == SDL_KEYDOWN) {
+                if (e.key.keysym.sym == SDLK_ESCAPE) {
+                    quit = true;
+                }
+            }
+            if (e.type == SDL_WINDOWEVENT ) {
+                if (e.window.event == SDL_WINDOWEVENT_RESIZED || e.window.event == SDL_WINDOWEVENT_SHOWN) {
+                }
+                if (e.window.event == SDL_WINDOWEVENT_EXPOSED ) {
+                }
+                if (e.window.event == SDL_WINDOWEVENT_CLOSE) {
+                    quit = true;
+                }
+            }
+        } // while (SDL_PollEvent(&e))
+        ppu_tick();
+        if( ppu_interrupt() ) {
+            draw();
+        }
+    }
+
+    return 0;
 
     d6502_t cpu;
     d6502_init(&cpu);

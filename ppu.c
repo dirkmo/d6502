@@ -4,16 +4,11 @@
 
 #include <assert.h>
 #include <stdio.h>
-#include <SDL2/SDL.h>
 #include "palette.h"
 #include "cartridge.h"
 
-#define WIN_W 800
-#define WIN_H 600
 #define VBLANK 0x80
-#define FRAME_W 341
-#define FRAME_H 262
-#define TICKS_PER_FRAME (FRAME_W * FRAME_H)
+#define TICKS_PER_FRAME (TOTAL_FRAME_W * TOTAL_FRAME_H)
 #define PATTERN_TABLE_0 0x0000
 #define PATTERN_TABLE_1 0x1000
 #define NAME_TABLE_0 0x2000
@@ -25,15 +20,12 @@
 #define ATTR_TABLE_2 (NAME_TABLE_2 + 0x3c0)
 #define ATTR_TABLE_3 (NAME_TABLE_3 + 0x3c0)
 
+static uint32_t tick = 0;
+/* static*/ uint8_t pixels[FRAME_W*FRAME_H*3] = { 0 };
+static bool interrupt = false;
 
-static SDL_Window *win = NULL;
-static SDL_Renderer *ren = NULL;
-static SDL_Texture *tex = NULL;
-
-static uint8_t pixels[WIN_W*WIN_H*3] = { 0 };
-
-uint8_t ppu_ctrl1 = 0;
-uint8_t ppu_ctrl2 = 0;
+uint8_t ppu_ctrl = 0;
+uint8_t ppu_mask = 0;
 uint8_t ppu_status = 0;
 uint8_t ppu_spraddr = 0;
 uint8_t ppu_sprio = 0;
@@ -42,18 +34,22 @@ uint8_t ppudata = 0;
 
 uint8_t vram[0x4000] = { 0 };
 
-static uint32_t tick = 0;
 
+const uint8_t *ppu_getFrameBuffer(void) {
+    return &pixels[0];
+}
 
-void setpixel( int x, int y, uint8_t  r, uint8_t g, uint8_t b ) {
-    int p = (y * WIN_W + x) * 3;
+void setpixel( int x, int y, uint8_t col_idx ) {
+    int p = (y * FRAME_W + x) * 3;
     if( p+2 >= sizeof(pixels)) {
         printf("x: %d, y: %d\n", x, y);
         assert(p+2 < sizeof(pixels));
     }
-    pixels[p++] = b;
-    pixels[p++] = g;
-    pixels[p] = r;
+    int color = col_idx * 3;
+    assert( color+2 < sizeof(palette));
+    pixels[p++] = palette[color];
+    pixels[p++] = palette[color+1];
+    pixels[p] = palette[color+2];
 }
 
 uint8_t getTilePixel(const uint8_t *rawtile, uint8_t idx) {
@@ -66,30 +62,15 @@ uint8_t getTilePixel(const uint8_t *rawtile, uint8_t idx) {
 
 void drawTile( const uint8_t *rawtile, const uint8_t *colors, int x, int y) {
     for ( int i = 0; i < 64; i++ ) {
-        uint8_t pix = colors[getTilePixel(rawtile, i)] * 3;
-        int b = palette[pix];
-        int g = palette[pix+1];
-        int r = palette[pix+2];
-        setpixel(x+i%8, y+i/8, r, g, b);
+        uint8_t color = colors[getTilePixel(rawtile, i)] * 3;
+        setpixel(x+i%8, y+i/8, color);
     }
 }
 
 const uint8_t *getTile(uint8_t chr_idx, uint8_t idx) {
-    return cartridge_getCHR8k(chr_idx) + 16 * idx;
+    uint16_t base = (ppu_ctrl & 0x10) ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
+    return &cartridge_getCHR8k(0)[base + 16 * idx];
 }
-
-void draw(void) {
-    uint8_t colors[] = { 0xf, 0x27, 0x2a, 0x2b};
-    const uint8_t *tile;
-    for( int i = 0; i < 256; i++ ) {
-        tile = getTile(0, i);
-        drawTile(tile, colors, (i%16)*8, (i/16)*8);
-    }
-
-    SDL_UpdateTexture(tex, NULL, pixels, WIN_W*3);
-    SDL_RenderCopy(ren, tex, NULL, NULL);
-    SDL_RenderPresent(ren);
- }
 
 uint8_t getAttribute(const uint8_t *table, uint8_t x, uint8_t y) {
     // 256x240, 8 Attribute bytes per line
@@ -119,25 +100,13 @@ uint8_t getAttribute(const uint8_t *table, uint8_t x, uint8_t y) {
     return attr << 2;
 }
 
-
-int ppu_init_sdl(void) {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-        return -1;
-    }
-    win = SDL_CreateWindow("dNES", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 800, 600, SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
-    ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-    tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, WIN_W, WIN_H);
-    return 0;
-}
-
 void ppu_write(uint8_t addr, uint8_t dat) {
     switch(addr) {
         case 0: // PPUCTRL, PPU Control Register #1
-            ppu_ctrl1 = dat;
+            ppu_ctrl = dat;
             break;
         case 1: // PPUMASK, PPU Control Register #2
-            ppu_ctrl2 = dat;
+            ppu_mask = dat;
             break;
         case 2: // PPUSTATUS, PPU Status Register
             break;
@@ -152,7 +121,7 @@ void ppu_write(uint8_t addr, uint8_t dat) {
             break;
         case 7: // PPUDATA, VRAM I/O Register
             vram[ppuaddr] = dat;
-            ppuaddr += (ppu_ctrl1 & 0x04) ? 32 : 1;
+            ppuaddr += (ppu_ctrl & 0x04) ? 32 : 1;
             break;
         default:;
     }
@@ -179,7 +148,7 @@ uint8_t ppu_read(uint8_t addr) {
             break;
         case 7: // PPUDATA, VRAM I/O Register
             val = vram[ppuaddr];
-            ppuaddr += (ppu_ctrl1 & 0x04) ? 32 : 1;
+            ppuaddr += (ppu_ctrl & 0x04) ? 32 : 1;
             break;
         default:
             break;
@@ -188,7 +157,7 @@ uint8_t ppu_read(uint8_t addr) {
 }
 
 const uint8_t *getNameTable(void) {
-    uint16_t addr = NAME_TABLE_0 | ((ppu_ctrl1 & 0x3) << 10);
+    uint16_t addr = NAME_TABLE_0 | ((ppu_ctrl & 0x3) << 10);
     return (uint8_t*)&vram[addr];
 }
 
@@ -197,53 +166,75 @@ const uint8_t *getAttributeTable(void) {
 }
 
 const uint8_t *getSpritePatternTable(void) {
-    uint16_t addr = (ppu_ctrl1 & 0x08) ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
+    uint16_t addr = (ppu_ctrl & 0x08) ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
     return (uint8_t*)&vram[addr];
 }
 
 const uint8_t *getBgPatternTable(void) {
-    // uint16_t addr = (ppu_ctrl1 & 0x10) ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
+    // uint16_t addr = (ppu_ctrl & 0x10) ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
     // return (uint8_t*)&vram[addr];
-    return (uint8_t*) cartridge_getCHR8k((ppu_ctrl1 & 0x10) ? 1 : 0);
+    return (uint8_t*) (cartridge_getCHR8k(0) + ((ppu_ctrl & 0x10) ? 0x1000 : 0));
 }
 
+uint8_t getNameTableEntry(const uint8_t *nametable, int x, int y) {
+    x = x / 8;
+    y = y / 8;
+    uint16_t idx = y * 32 + x;
+    return nametable[idx];
+}
+
+bool ppu_interrupt(void) {
+    return (ppu_ctrl & 0x80) && interrupt;
+}
+
+void print_tile(const uint8_t *tile) {
+    for ( int i = 0; i<64; i++) {
+        printf("%d%s", getTilePixel(tile, i), ((i % 8) == 7) ? "\n" : "");
+    }
+}
 
 void ppu_tick(void) {
-    static uint16_t pixel_count = 0;
-    static const uint8_t *tile;
-    uint32_t frame_pixel_idx = tick % TICKS_PER_FRAME;
-    uint32_t y = frame_pixel_idx / FRAME_W;
-    uint32_t x = frame_pixel_idx % FRAME_W;
-    uint8_t attr = 0;
-    uint8_t pixel = 0;
+    static const uint8_t *bgtile;
+    static uint8_t attr = 0;
 
+    uint32_t frame_pixel_idx = tick % TICKS_PER_FRAME;
+    uint32_t y = frame_pixel_idx / TOTAL_FRAME_W;
+    uint32_t x = frame_pixel_idx % TOTAL_FRAME_W;
+
+    uint8_t relx = x % 8;
+    uint8_t rely = y % 8;
 
     if (x == 0) {
         // beginning of line
         if ( y == 0 ) {
+            // beginning of frame
             ppu_status &= ~VBLANK;
-            pixel_count = 0;
-        } else if ( y == 240 ) {
-            ppu_status |= VBLANK;
+            interrupt = false;
+        }
+    } else {
+        if (x == TOTAL_FRAME_W-1) {
+            if (y == FRAME_H-1) {
+                // last visible line done
+                ppu_status |= VBLANK;
+                interrupt = true;
+            }
         }
     }
 
-    if (x < 256) {
-        // Visible pixels
-        if ((x % 8) == 0) {
-            // attribute data
-            // uint8_t byte_idx = (y/32)*8 + x / 32;
-            // attr = getAttributeTable()[byte_idx];
-            
-            attr = attr << 2;
-            // nametable
-            uint8_t tile_idx = getNameTable()[pixel_count];
-            pixel_count++;
-            // tile
-            tile = getBgPatternTable() + tile_idx;
+    if (x < FRAME_W) {
+        if (y < FRAME_H) {
+            // Visible pixels
+            if (relx == 0 && rely == 0) {
+                // upperleft of tile
+                // attr = getAttribute( getAttributeTable(), x, y);
+                uint8_t tile_idx = getNameTableEntry(getNameTable(), x, y);
+                bgtile = getTile((ppu_ctrl & 0x10) ? 1 : 0, tile_idx);
+                printf("%dx%d Tile %d\n", x, y, tile_idx);
+                // print_tile(bgtile);
+            }
+            uint8_t pixel = attr | getTilePixel(bgtile, 8*rely+relx);
+            setpixel(x, y, pixel);
         }
-        pixel = getAttribute( getAttributeTable(), x, y) | getTilePixel(tile, 8*(y%8)+(x%8));
-        setpixel(x, y, palette[pixel+2], palette[pixel+1], palette[pixel]);
     } else {
         // HBLANK
     }
