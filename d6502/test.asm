@@ -1,11 +1,13 @@
 .SETCPU "6502"
 
 .code
+reset:  cli
+        ;sei
 
-reset:
+loop:
         LDA #$01
         STA $0
-        jmp reset
+        jmp loop
 
 nmi:    lda #$02
         sta $0

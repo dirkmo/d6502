@@ -20,7 +20,12 @@ uint16_t read16(d6502_t *cpu, uint16_t addr) {
 }
 
 static void fetch(d6502_t *cpu) {
-    uint8_t opcode = cpu->read(cpu->pc);
+    uint8_t opcode;
+    if (cpu->nmi || cpu->interrupt) {
+        opcode = 0x00; // BRK opcode
+    } else {
+        opcode = cpu->read(cpu->pc);
+    }
     cpu->instruction = get_instruction(opcode);
 }
 
@@ -38,7 +43,7 @@ static void execute(d6502_t *cpu) {
     } else {
         printf("%s\n", cpu->nmi ? "NMI" : "interrupt");
     }
-        
+    
     cpu->instruction->operation(cpu);
     cpu->pc += cpu->instruction->len;
     cpu->current_cycle = cpu->instruction->cycles + cpu->extra_clocks;
@@ -46,7 +51,6 @@ static void execute(d6502_t *cpu) {
 
 void d6502_init(d6502_t *cpu) {
     initialize_instructions_sorted();
-
     cpu->instruction = get_instruction(0xEA); // NOP
     cpu->extra_clocks = 0;
     cpu->current_cycle = 0;
@@ -56,16 +60,12 @@ void d6502_init(d6502_t *cpu) {
 
 int d6502_tick(d6502_t *cpu) {
     if(cpu->current_cycle == 0) {
-        if (cpu->nmi || cpu->interrupt) {
-            BRK(cpu);
-            if(cpu->nmi) {
-                cpu->nmi = false;
-            } else if(cpu->interrupt) {
-                cpu->interrupt = false;
-            }
-        } else {
-            fetch(cpu);
-            execute(cpu);
+        fetch(cpu);
+        execute(cpu);
+        if(cpu->nmi) {
+            cpu->nmi = false;
+        } else if(cpu->interrupt) {
+            cpu->interrupt = false;
         }
     } else {
         cpu->current_cycle--;

@@ -124,7 +124,7 @@ void BRK(d6502_t *cpu) { // Force Break and interrupt/nmi
     uint8_t st = cpu->st | intr ? 0 : FLAG_B;
     push8(cpu, st);
     set_flag(cpu, FLAG_I, 1);
-    if (cpu->nmi) {
+    if (cpu->nmi) { // NMI has higher prio
         vector = NMI_ADDR;
     }
     cpu->pc = read16(cpu, vector) - cpu->instruction->len;
