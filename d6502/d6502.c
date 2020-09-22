@@ -90,7 +90,7 @@ void d6502_disassemble(d6502_t *cpu, uint16_t addr, char *asmcode) {
 }
 
 void d6502_reset(d6502_t *cpu) {
-    cpu->pc = read16(cpu, 0xFFFC);
+    cpu->pc = read16(cpu, RESET_ADDR);
     cpu->st = FLAG_I | FLAG_R;
     cpu->a = 0;
     cpu->x = 0;

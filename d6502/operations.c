@@ -115,6 +115,7 @@ void BPL(d6502_t *cpu) { // Branch on result plus
 
 void BRK(d6502_t *cpu) { // Force Break and interrupt/nmi
     bool intr = cpu->nmi || cpu->interrupt;
+    uint16_t vector = INT_ADDR;
     uint16_t pc = cpu->pc + intr ? 0 : 2;
     push16(cpu, pc);
     // http://visual6502.org/wiki/index.php?title=6502_BRK_and_B_bit
@@ -123,7 +124,10 @@ void BRK(d6502_t *cpu) { // Force Break and interrupt/nmi
     uint8_t st = cpu->st | intr ? 0 : FLAG_B;
     push8(cpu, st);
     set_flag(cpu, FLAG_I, 1);
-    cpu->pc = read16(cpu, 0xFFFE) - cpu->instruction->len;
+    if (cpu->nmi) {
+        vector = NMI_ADDR;
+    }
+    cpu->pc = read16(cpu, vector) - cpu->instruction->len;
 }
 
 void BVC(d6502_t *cpu) { // Branch on overflow clear

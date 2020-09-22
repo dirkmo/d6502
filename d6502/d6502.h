@@ -6,6 +6,10 @@
 
 #define ENABLE_DECIMAL_MODE false
 
+#define NMI_ADDR   0xfffa
+#define RESET_ADDR 0xfffc
+#define INT_ADDR   0xfffe
+
 struct d6502_s;
 typedef struct d6502_s d6502_t;
 

@@ -193,6 +193,15 @@ void print_tile(const uint8_t *tile) {
     }
 }
 
+bool ppu_should_draw(void) {
+    static uint32_t last = 0;
+    if (tick > last + TICKS_PER_FRAME) {
+        last = tick;
+        return true;
+    }
+    return false;
+}
+
 void ppu_tick(void) {
     static const uint8_t *bgtile;
     static uint8_t attr = 0;

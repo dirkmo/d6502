@@ -3,7 +3,7 @@
 CFLAGS=-Wall -g -Wno-unused-function -Wfatal-errors
 INC=
 
-SRCS=$(wildcard *.c)
+SRCS=addressing.c d6502.c instruction_table.c operations.c
 OBJS=$(SRCS:.c=.o)
 
 all: d6502.a
@@ -12,11 +12,14 @@ all: d6502.a
 	gcc $(CFLAGS) $(INC) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) d6502.a
+	rm -f $(OBJS) d6502.a sim.o test.bin
 
 test.bin: test.asm
-	ca65 test.asm
-	ld65 test.o -o test.bin -t none
+	ca65 test.asm -l test.lst
+	ld65 test.o -o $@ -t none -m $@.map -vm
 
 d6502.a: $(OBJS)
 	ar -cr $@ $(OBJS)
+
+sim: d6502.a sim.o test.bin
+	gcc sim.o d6502.a -o sim

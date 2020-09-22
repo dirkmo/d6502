@@ -30,7 +30,7 @@ int init_sdl(void) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         return -1;
     }
-    win = SDL_CreateWindow("dNES", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, FRAME_W*5, FRAME_H*5, SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
+    win = SDL_CreateWindow("dNES", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, FRAME_W*4, FRAME_H*4, SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
     ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
     tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, FRAME_W, FRAME_H);
@@ -158,8 +158,9 @@ int main(int argc, char *argv[]) {
     }
     draw();
     atexit(onExit);
-    cartridge_loadROM("rom/bg.nes");
+    cartridge_loadROM("rom/Tetris.nes");
 
+#if 0
     writebus(PPUADDR, NTABLE0 >> 8);
     writebus(PPUADDR, NTABLE0 & 0xff);
     for( int i = 0; i<256; i++) {
@@ -196,8 +197,9 @@ int main(int argc, char *argv[]) {
             draw();
         }
     }
-
     return 0;
+
+#endif
 
     d6502_t cpu;
     d6502_init(&cpu);
@@ -213,7 +215,30 @@ int main(int argc, char *argv[]) {
     char raw[16];
     char logstr[128];
     char buf[256];
+    SDL_Event e;
+    int nmi_count = 0;
     while( EMULATION_END == 0) {
+
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) {
+                EMULATION_END = 1;
+            }
+            if (e.type == SDL_KEYDOWN) {
+                if (e.key.keysym.sym == SDLK_ESCAPE) {
+                    EMULATION_END = 1;
+                }
+            }
+            if (e.type == SDL_WINDOWEVENT ) {
+                if (e.window.event == SDL_WINDOWEVENT_RESIZED || e.window.event == SDL_WINDOWEVENT_SHOWN) {
+                }
+                if (e.window.event == SDL_WINDOWEVENT_EXPOSED ) {
+                }
+                if (e.window.event == SDL_WINDOWEVENT_CLOSE) {
+                    EMULATION_END = 1;
+                }
+            }
+        } // while (SDL_PollEvent(&e))
+
         d6502_disassemble(&cpu, cpu.pc, asmcode);
         get_raw_instruction(&cpu, raw);
         print_regs(&cpu);
@@ -244,6 +269,9 @@ int main(int argc, char *argv[]) {
         while(1) {
             // ppu runs 3x faster than the cpu
             ppu_tick();
+            if( ppu_should_draw() ) {
+                draw();
+            }
             clock++;
             if((clock%3) == 0) {
                 // execute instruction
@@ -253,6 +281,14 @@ int main(int argc, char *argv[]) {
             }
         }
         instruction_counter++; // instruction counter
+        if (ppu_interrupt()) {
+            if(nmi_count == 0) {
+                d6502_nmi(&cpu);
+            }
+            nmi_count++;
+        } else {
+            nmi_count = 0;
+        }
     }
     fclose(log);
 
