@@ -3,16 +3,16 @@
 .code
 reset:  cli
         ;sei
+        ldx #0
+        ldy #0
 
 loop:
         LDA #$01
         STA $0
         jmp loop
 
-nmi:    lda #$02
-        sta $0
-        jmp nmi
+nmi:    inx
+        rti
 
-intr:   lda #$03
-        sta $0
-        jmp intr
+intr:   iny
+        rti

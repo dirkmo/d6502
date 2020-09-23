@@ -140,8 +140,8 @@ int main(int argc, char *argv[]) {
     cpu.write = writebus;
     
     write16(RESET_ADDR, 0x1000);
-    write16(NMI_ADDR, 0x1008);
-    write16(INT_ADDR, 0x100f);
+    write16(NMI_ADDR, 0x100c);
+    write16(INT_ADDR, 0x100e);
     
     d6502_reset(&cpu);
 
