@@ -94,8 +94,10 @@ uint8_t getAttribute(const uint8_t *table, uint8_t x, uint8_t y) {
     //      ||+------- Upper two (2) colour bits for Square 2 (Tiles #8,9,A,B)
     //      +--------- Upper two (2) colour bits for Square 3 (Tiles #C,D,E,F)
 
-    uint8_t byte_idx = (y/32)*8 + x / 32;
-    uint8_t bit_idx = (y/16)*4 + (x/16)*2;
+    // uint8_t byte_idx = (y/32)*8 + x / 32;
+    // uint8_t bit_idx = (y/16)*4 + (x/16)*2;
+    uint8_t byte_idx = (y*8 + x) / 32;
+    uint8_t bit_idx = (y & 0x10) * 4 + (x & 0x10) * 2;;
     uint8_t attr = (table[byte_idx] >> bit_idx) & 0x03;
     return attr << 2;
 }

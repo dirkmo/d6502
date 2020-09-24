@@ -21,6 +21,7 @@ uint8_t memory[0x10000];
 
 uint8_t ram_internal[0x800];
 
+// #define printf(...) (void)0;
 
 int EMULATION_END = 0;
 uint32_t run_count = 0;
@@ -158,7 +159,7 @@ int main(int argc, char *argv[]) {
     }
     draw();
     atexit(onExit);
-    cartridge_loadROM("rom/Tetris.nes");
+    cartridge_loadROM("rom/DonkeyKong.nes");
 
 #if 0
     writebus(PPUADDR, NTABLE0 >> 8);
