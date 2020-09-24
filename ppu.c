@@ -4,7 +4,7 @@
 
 #include <assert.h>
 #include <stdio.h>
-#include "palette.h"
+#include "nescolors.h"
 #include "cartridge.h"
 
 #define VBLANK 0x80
@@ -21,35 +21,31 @@
 #define ATTR_TABLE_3 (NAME_TABLE_3 + 0x3c0)
 
 static uint32_t tick = 0;
-/* static*/ uint8_t pixels[FRAME_W*FRAME_H*3] = { 0 };
+/* static*/ uint32_t pixels[FRAME_W * FRAME_H];
 static bool interrupt = false;
 
 uint8_t ppu_ctrl = 0;
 uint8_t ppu_mask = 0;
 uint8_t ppu_status = 0;
-uint8_t ppu_spraddr = 0;
-uint8_t ppu_sprio = 0;
 uint16_t ppuaddr = 0;
 uint8_t ppudata = 0;
+
+uint8_t oam_addr = 0;
 
 uint8_t vram[0x4000] = { 0 };
 
 
-const uint8_t *ppu_getFrameBuffer(void) {
+const uint32_t *ppu_getFrameBuffer(void) {
     return &pixels[0];
 }
 
-void setpixel( int x, int y, uint8_t col_idx ) {
-    int p = (y * FRAME_W + x) * 3;
-    if( p+2 >= sizeof(pixels)) {
+void setpixel( int x, int y, uint8_t color ) {
+    int p = y * FRAME_W + x;
+    if( p >= sizeof(pixels)) {
         printf("x: %d, y: %d\n", x, y);
-        assert(p+2 < sizeof(pixels));
+        assert(p < sizeof(pixels));
     }
-    int color = col_idx * 3;
-    assert( color+2 < sizeof(palette));
-    pixels[p++] = palette[color];
-    pixels[p++] = palette[color+1];
-    pixels[p] = palette[color+2];
+    pixels[p] = nescolors[vram[0x3f00+color]];
 }
 
 uint8_t getTilePixel(const uint8_t *rawtile, uint8_t idx) {
@@ -115,6 +111,7 @@ void ppu_write(uint8_t addr, uint8_t dat) {
         case 3: // OAMADDR, SPR-RAM Address Register
             break;
         case 4: // OAMDATA, SPR-RAM I/O Register
+            vram[oam_addr++] = dat;
             break;
         case 5: // PPUSCROLL, VRAM Address Register #1 (W2)
             break;
@@ -133,8 +130,10 @@ uint8_t ppu_read(uint8_t addr) {
     uint8_t val = 0;
     switch(addr) {
         case 0: // PPUCTRL, PPU Control Register #1
+            val = ppu_ctrl;
             break;
         case 1: // PPUMASK, PPU Control Register #2
+            val = ppu_mask;
             break;
         case 2: // PPUSTATUS, PPU Status Register
             val = ppu_status;
@@ -147,6 +146,7 @@ uint8_t ppu_read(uint8_t addr) {
         case 5: // PPUSCROLL, VRAM Address Register #1 (W2)
             break;
         case 6: // PPUADDR, VRAM Address Register #2 (W2)
+            val = ppuaddr;
             break;
         case 7: // PPUDATA, VRAM I/O Register
             val = vram[ppuaddr];

@@ -34,12 +34,12 @@ int init_sdl(void) {
     win = SDL_CreateWindow("dNES", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, FRAME_W*4, FRAME_H*4, SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
     ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-    tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, FRAME_W, FRAME_H);
+    tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STREAMING, FRAME_W, FRAME_H);
     return 0;
 }
 
 void draw(void) {
-    SDL_UpdateTexture(tex, NULL, ppu_getFrameBuffer(), FRAME_W*3);
+    SDL_UpdateTexture(tex, NULL, ppu_getFrameBuffer(), FRAME_W*4);
     // const SDL_Rect dst = {.x = 0, .y = 0, .w = FRAME_W, .h = FRAME_H };
     SDL_RenderCopy(ren, tex, NULL, NULL);
     SDL_RenderPresent(ren);
@@ -172,31 +172,42 @@ int main(int argc, char *argv[]) {
     writebus(PPUCTRL, 0x90);
 
     bool quit = false;
-    SDL_Event e;
+    SDL_Event e2;
     while (!quit) {
-        while (SDL_PollEvent(&e)) {
-            if (e.type == SDL_QUIT) {
+        while (SDL_PollEvent(&e2)) {
+            if (e2.type == SDL_QUIT) {
                 quit = true;
             }
-            if (e.type == SDL_KEYDOWN) {
-                if (e.key.keysym.sym == SDLK_ESCAPE) {
+            if (e2.type == SDL_KEYDOWN) {
+                if (e2.key.keysym.sym == SDLK_ESCAPE) {
                     quit = true;
+                }
+                if (e2.key.keysym.sym == SDLK_SPACE) {
+                    static int color = 0;
+                    extern uint32_t pixels[];
+                    extern uint32_t palette[];
+                    static int x = 0;
+                    pixels[x++] = palette[color];
+                    printf("%d\n", color);
+                    color = (color + 1) % 64;
+                    draw();
                 }
             }
-            if (e.type == SDL_WINDOWEVENT ) {
-                if (e.window.event == SDL_WINDOWEVENT_RESIZED || e.window.event == SDL_WINDOWEVENT_SHOWN) {
+            if (e2.type == SDL_WINDOWEVENT ) {
+                if (e2.window.event == SDL_WINDOWEVENT_RESIZED || e2.window.event == SDL_WINDOWEVENT_SHOWN) {
                 }
-                if (e.window.event == SDL_WINDOWEVENT_EXPOSED ) {
+                if (e2.window.event == SDL_WINDOWEVENT_EXPOSED ) {
                 }
-                if (e.window.event == SDL_WINDOWEVENT_CLOSE) {
+                if (e2.window.event == SDL_WINDOWEVENT_CLOSE) {
                     quit = true;
                 }
+                draw();
             }
         } // while (SDL_PollEvent(&e))
-        ppu_tick();
-        if( ppu_interrupt() ) {
-            draw();
-        }
+        // ppu_tick();
+        // if( ppu_interrupt() ) {
+        //     draw();
+        // }
     }
     return 0;
 

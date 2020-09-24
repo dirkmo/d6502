@@ -38,7 +38,7 @@ typedef enum {
 } ppu_register;
 
 bool ppu_interrupt(void);
-const uint8_t *ppu_getFrameBuffer(void);
+const uint32_t *ppu_getFrameBuffer(void);
 bool ppu_should_draw(void);
 
 void ppu_write(uint8_t addr, uint8_t dat);
