@@ -85,15 +85,13 @@ uint8_t getAttribute(const uint8_t *table, uint8_t x, uint8_t y) {
     //    (Square #)
     //  ----------------
     //      33221100
-    //      ||||||+--- Upper two (2) colour bits for Square 0 (Tiles #0,1,2,3)
-    //      ||||+----- Upper two (2) colour bits for Square 1 (Tiles #4,5,6,7)
-    //      ||+------- Upper two (2) colour bits for Square 2 (Tiles #8,9,A,B)
-    //      +--------- Upper two (2) colour bits for Square 3 (Tiles #C,D,E,F)
+    //      ||||||+--- Upper two (2) colour bits for Square 0 (Tiles #0,1,2,3); (x % 32) < 16; (y % 32) < 16; lower nibble bits 0+1
+    //      ||||+----- Upper two (2) colour bits for Square 1 (Tiles #4,5,6,7); (x % 32) > 15; (y % 32) < 16; lower nibble bits 2+3
+    //      ||+------- Upper two (2) colour bits for Square 2 (Tiles #8,9,A,B); (x % 32) < 16; (y % 32) > 15; upper nibble bits 0+1
+    //      +--------- Upper two (2) colour bits for Square 3 (Tiles #C,D,E,F); (x % 32) > 15; (y % 32) > 15; upper nibble bits 2+3
 
-    // uint8_t byte_idx = (y/32)*8 + x / 32;
-    // uint8_t bit_idx = (y/16)*4 + (x/16)*2;
-    uint8_t byte_idx = (y*8 + x) / 32;
-    uint8_t bit_idx = (y & 0x10) * 4 + (x & 0x10) * 2;;
+    int byte_idx = (y/32)*8 + x/32;
+    uint8_t bit_idx = ((y & 0x10) >> 2) + ((x & 0x10) >> 3);
     uint8_t attr = (table[byte_idx] >> bit_idx) & 0x03;
     return attr << 2;
 }
