@@ -221,13 +221,15 @@ int main(int argc, char *argv[]) {
     cpu.write = writebus;
     
     d6502_reset(&cpu);
-
-    FILE *log = fopen("log.txt", "w");
-
+    
+#ifdef FILELOG
+    FILE *log = NULL;
+    log = fopen("log.txt", "w");
+    char logstr[128];
+#endif
     int instruction_counter = 1;
     char asmcode[32];
     char raw[16];
-    char logstr[128];
     char buf[256];
     SDL_Event e;
     int nmi_count = 0;
@@ -297,6 +299,7 @@ int main(int argc, char *argv[]) {
             handle(&cpu, buf);
         } while(strlen(buf) > 0);
         printf("\n");
+#ifdef FILELOG
         sprintf(logstr, "%04X  %s  %s", cpu.pc, raw, asmcode);
         int p = strlen(logstr);
         while( p < 48 ) {
@@ -305,7 +308,7 @@ int main(int argc, char *argv[]) {
         sprintf(logstr+p, "A:%02X X:%02X Y:%02X P:%02X SP:%02X\n", cpu.a, cpu.x, cpu.y, cpu.st, cpu.sp);
         fwrite(logstr, strlen(logstr), 1, log);
         fflush(log);
-
+#endif
         int clock = 0;
         while(1) {
             // ppu runs 3x faster than the cpu
@@ -331,7 +334,9 @@ int main(int argc, char *argv[]) {
             nmi_count = 0;
         }
     }
+#ifdef FILELOG
     fclose(log);
+#endif
 
     return 0;
 }
