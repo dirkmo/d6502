@@ -17,6 +17,11 @@ static SDL_Window *win = NULL;
 static SDL_Renderer *ren = NULL;
 static SDL_Texture *tex = NULL;
 
+struct dma_t {
+    uint8_t page;
+    int count; // if < 0 then no dma active
+} dma = { .page = 2, .count = -1 };
+
 
 uint8_t memory[0x10000];
 
@@ -55,7 +60,12 @@ void writebus(uint16_t addr, uint8_t dat) {
         case 0x2000 ... 0x3fff: // PPU
             ppu_write(addr & 0x7, dat);
             break;
-        case 0x4000 ... 0x401f: // APU + IO
+        case 0x4014:
+            dma.count = 0;
+            dma.page = dat;
+            break;
+        case 0x4000 ... 0x4013: // APU + IO
+        case 0x4015 ... 0x401f: // APU + IO
             apu_write(addr & 0x1f, dat );
             break;
         case 0x6000 ... 0xffff: // cartridge
@@ -78,6 +88,15 @@ uint8_t readbus(uint16_t addr) {
         default: ;
     }
     return 0;
+}
+
+void dma_handler(void) {
+    if (dma.count < 256) {
+        uint8_t dat = readbus(dma.page * 256 + dma.count++);
+        ppu_write(4, dat);
+    } else {
+        dma.count = -1;
+    }
 }
 
 void print_regs(d6502_t *cpu) {
@@ -161,7 +180,7 @@ int main(int argc, char *argv[]) {
     }
     draw();
     atexit(onExit);
-    cartridge_loadROM("rom/nestest.nes");
+    cartridge_loadROM("rom/DonkeyKong.nes");
 
 #if 0
     writebus(PPUADDR, NTABLE0 >> 8);
@@ -316,13 +335,17 @@ int main(int argc, char *argv[]) {
             if( ppu_should_draw() ) {
                 draw();
             }
-            clock++;
-            if((clock%3) == 0) {
-                // execute instruction
-                if( d6502_tick(&cpu) == 0 ) {
-                    break;
+            if (dma.count < 0) {
+                if((clock%3) == 0) {
+                    // execute instruction
+                    if( d6502_tick(&cpu) == 0 ) {
+                        break;
+                    }
                 }
+            } else {
+                dma_handler();
             }
+            clock++;
         }
         instruction_counter++; // instruction counter
         if (ppu_interrupt()) {

@@ -44,7 +44,8 @@ uint16_t ppuaddr = 0;
 uint8_t ppudata = 0;
 uint8_t oam_addr = 0;
 
-uint8_t vram[0x4000] = { 0 };
+uint8_t vram[0x4000];
+uint8_t oam[0x100];
 
 
 const uint32_t *ppu_getFrameBuffer(void) {
@@ -122,9 +123,10 @@ void ppu_write(uint8_t addr, uint8_t dat) {
         case 2: // PPUSTATUS, PPU Status Register
             break;
         case 3: // OAMADDR, SPR-RAM Address Register
+            oam_addr = dat;
             break;
         case 4: // OAMDATA, SPR-RAM I/O Register
-            vram[oam_addr++] = dat;
+            oam[oam_addr++] = dat;
             break;
         case 5: // PPUSCROLL, VRAM Address Register #1 (W2)
             break;
@@ -153,12 +155,9 @@ uint8_t ppu_read(uint8_t addr) {
             ppu_status &= ~VBLANK;
             break;
         case 3: // OAMADDR, SPR-RAM Address Register
-            printf("OAMADDR not implemented\n");
-            assert(0);
             break;
         case 4: // OAMDATA, SPR-RAM I/O Register
-            printf("OAMDATA not implemented\n");
-            assert(0);
+            val = oam[oam_addr];
             break;
         case 5: // PPUSCROLL, VRAM Address Register #1 (W2)
             break;
@@ -274,6 +273,9 @@ void ppu_tick(void) {
         }
     } else {
         // HBLANK
+        if(y < FRAME_H) {
+            oam_addr = 0;
+        }
     }
     tick++;
 }

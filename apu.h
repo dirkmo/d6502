@@ -20,5 +20,4 @@ void apu_report_buttonpress(button_t button, bool pressed);
 uint8_t apu_read(uint8_t addr);
 void apu_write(uint8_t addr, uint8_t dat);
 
-
 #endif
