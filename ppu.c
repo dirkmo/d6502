@@ -20,6 +20,19 @@
 #define ATTR_TABLE_2 (NAME_TABLE_2 + 0x3c0)
 #define ATTR_TABLE_3 (NAME_TABLE_3 + 0x3c0)
 
+// ppu_ctrl register
+#define PATTERN_TABLE_SEL ((ppu_ctrl & 0x10) >> 4)
+
+// ppu_mask register
+#define COLOR_ENABLED           (ppu_mask & 0x01)
+#define BG_LEFT_ENABLED         (ppu_mask & 0x02)
+#define SPRITES_LEFT_ENABLED    (ppu_mask & 0x04)
+#define SHOW_BG_ENABLED         (ppu_mask & 0x08)
+#define SHOW_SPRITES_ENABLED    (ppu_mask & 0x10)
+#define EMPHASIZE_RED_ENABLED   (ppu_mask & 0x20)
+#define EMPHASIZE_GREEN_ENABLED (ppu_mask & 0x40)
+#define EMPHASIZE_BLUE_ENABLED  (ppu_mask & 0x80)
+
 static uint32_t tick = 0;
 /* static*/ uint32_t pixels[FRAME_W * FRAME_H];
 static bool interrupt = false;
@@ -29,7 +42,6 @@ uint8_t ppu_mask = 0;
 uint8_t ppu_status = 0;
 uint16_t ppuaddr = 0;
 uint8_t ppudata = 0;
-
 uint8_t oam_addr = 0;
 
 uint8_t vram[0x4000] = { 0 };
@@ -49,6 +61,9 @@ void setpixel( int x, int y, uint8_t color ) {
 }
 
 uint8_t getTilePixel(const uint8_t *rawtile, uint8_t idx) {
+    if (!rawtile) {
+        return 0;
+    }
     int bitidx = idx % 8;
     int byteidx = (idx / 8);
     uint8_t b1 = (rawtile[byteidx] >> (7-bitidx)) & 1;
@@ -138,8 +153,12 @@ uint8_t ppu_read(uint8_t addr) {
             ppu_status &= ~VBLANK;
             break;
         case 3: // OAMADDR, SPR-RAM Address Register
+            printf("OAMADDR not implemented\n");
+            assert(0);
             break;
         case 4: // OAMDATA, SPR-RAM I/O Register
+            printf("OAMDATA not implemented\n");
+            assert(0);
             break;
         case 5: // PPUSCROLL, VRAM Address Register #1 (W2)
             break;
@@ -233,16 +252,24 @@ void ppu_tick(void) {
     if (x < FRAME_W) {
         if (y < FRAME_H) {
             // Visible pixels
-            if (relx == 0) {
-                // upperleft of tile
-                uint8_t tile_idx = getNameTableEntry(getNameTable(), x, y);
-                bgtile = getTile((ppu_ctrl & 0x10) ? 1 : 0, tile_idx);
-                // printf("%dx%d Tile %d\n", x, y, tile_idx);
-                if (x % 16 == 0) {
-                    attr = getAttribute( getAttributeTable(), x, y);
+            uint8_t bgpixel = 0;
+            if (SHOW_BG_ENABLED) {
+                if( BG_LEFT_ENABLED || x >= 8) {
+                    if (relx == 0) {
+                        // upperleft of tile
+                        uint8_t tile_idx = getNameTableEntry(getNameTable(), x, y);
+                        bgtile = getTile(PATTERN_TABLE_SEL, tile_idx);
+                        // printf("%dx%d Tile %d\n", x, y, tile_idx);
+                        if (x % 16 == 0) {
+                            attr = getAttribute( getAttributeTable(), x, y);
+                        }
+                    }
+                    bgpixel = SHOW_BG_ENABLED ? (attr | getTilePixel(bgtile, 8*rely+relx)) : 0;
                 }
             }
-            uint8_t pixel = attr | getTilePixel(bgtile, 8*rely+relx);
+
+            uint8_t sprite_pixel = SHOW_SPRITES_ENABLED ? 0 : 0;
+            uint8_t pixel = bgpixel;
             setpixel(x, y, pixel);
         }
     } else {

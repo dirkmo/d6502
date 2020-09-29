@@ -1,6 +1,7 @@
 #include "d6502.h"
 #include "instruction_table.h"
 #include "ppu.h"
+#include "apu.h"
 #include "cartridge.h"
 #include "inesheader.h"
 #include <stdio.h>
@@ -55,6 +56,7 @@ void writebus(uint16_t addr, uint8_t dat) {
             ppu_write(addr & 0x7, dat);
             break;
         case 0x4000 ... 0x401f: // APU + IO
+            apu_write(addr & 0x1f, dat );
             break;
         case 0x6000 ... 0xffff: // cartridge
             cartridge_write(addr, dat);
@@ -70,7 +72,7 @@ uint8_t readbus(uint16_t addr) {
         case 0x2000 ... 0x3fff: // PPU
             return ppu_read(addr & 0x7);
         case 0x4000 ... 0x401f: // APU + IO
-            return 0;
+            return apu_read(addr & 0x1f);
         case 0x6000 ... 0xffff: // cartridge
             return cartridge_read(addr);
         default: ;
@@ -159,7 +161,7 @@ int main(int argc, char *argv[]) {
     }
     draw();
     atexit(onExit);
-    cartridge_loadROM("rom/DonkeyKong.nes");
+    cartridge_loadROM("rom/nestest.nes");
 
 #if 0
     writebus(PPUADDR, NTABLE0 >> 8);
@@ -235,9 +237,36 @@ int main(int argc, char *argv[]) {
             if (e.type == SDL_QUIT) {
                 EMULATION_END = 1;
             }
-            if (e.type == SDL_KEYDOWN) {
-                if (e.key.keysym.sym == SDLK_ESCAPE) {
-                    EMULATION_END = 1;
+            if (e.type == SDL_KEYDOWN || e.type == SDL_KEYUP) {
+                switch (e.key.keysym.sym) {
+                    case SDLK_UP:
+                        apu_report_buttonpress(BUTTON_UP, e.type == SDL_KEYDOWN);
+                        break;
+                    case SDLK_DOWN:
+                        apu_report_buttonpress(BUTTON_DOWN, e.type == SDL_KEYDOWN);
+                        break;
+                    case SDLK_LEFT:
+                        apu_report_buttonpress(BUTTON_LEFT, e.type == SDL_KEYDOWN);
+                        break;
+                    case SDLK_RIGHT:
+                        apu_report_buttonpress(BUTTON_RIGHT, e.type == SDL_KEYDOWN);
+                        break;
+                    case SDLK_y:
+                        apu_report_buttonpress(BUTTON_A, e.type == SDL_KEYDOWN);
+                        break;
+                    case SDLK_x:
+                        apu_report_buttonpress(BUTTON_B, e.type == SDL_KEYDOWN);
+                        break;
+                    case SDLK_c:
+                        apu_report_buttonpress(BUTTON_SELECT, e.type == SDL_KEYDOWN);
+                        break;
+                    case SDLK_v:
+                        apu_report_buttonpress(BUTTON_START, e.type == SDL_KEYDOWN);
+                        break;
+                    case SDLK_ESCAPE:
+                        EMULATION_END = 1;
+                        break;
+                    default: ;
                 }
             }
             if (e.type == SDL_WINDOWEVENT ) {
