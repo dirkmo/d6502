@@ -21,7 +21,9 @@
 #define ATTR_TABLE_3 (NAME_TABLE_3 + 0x3c0)
 
 // ppu_ctrl register
-#define PATTERN_TABLE_SEL ((ppu_ctrl & 0x10) >> 4)
+#define SPRITE_PATTERN_TABLE_SEL    (ppu_ctrl & 0x08)
+#define BG_PATTERN_TABLE_SEL        (ppu_ctrl & 0x10)
+#define SPRITE_SIZE_8x16            (ppu_ctrl & 0x20)
 
 // ppu_mask register
 #define COLOR_ENABLED           (ppu_mask & 0x01)
@@ -32,6 +34,13 @@
 #define EMPHASIZE_RED_ENABLED   (ppu_mask & 0x20)
 #define EMPHASIZE_GREEN_ENABLED (ppu_mask & 0x40)
 #define EMPHASIZE_BLUE_ENABLED  (ppu_mask & 0x80)
+
+typedef struct {
+    uint8_t y;
+    uint8_t index;
+    uint8_t attr;
+    uint8_t x;
+} sprite_t;
 
 static uint32_t tick = 0;
 /* static*/ uint32_t pixels[FRAME_W * FRAME_H];
@@ -45,8 +54,41 @@ uint8_t ppudata = 0;
 uint8_t oam_addr = 0;
 
 uint8_t vram[0x4000];
-uint8_t oam[0x100];
 
+union {
+    uint8_t raw[0x100];
+    sprite_t sprite[64];
+} oam;
+
+sprite_t local_sprites[8];
+
+void oam_collectSprites(uint8_t y) {
+    int s = 0;
+    for(int i = 0; i < 64 && s < 8; i++) {
+        if ((y >= oam.sprite[i].y) && (y < oam.sprite[i].y+8)) {
+            local_sprites[s++] = oam.sprite[i];
+        }
+    }
+}
+
+const sprite_t *oam_getSprite(uint8_t x) {
+    for(int i = 0; i<8; i++) {
+        if( x >= oam.sprite[i].x && x < (oam.sprite[i].x+8)) {
+            return &oam.sprite[i];
+        }
+    }
+    return NULL;
+}
+
+const uint8_t *get_spriteTile(uint8_t idx) {
+    uint16_t tableaddr = SPRITE_PATTERN_TABLE_SEL ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
+    if (SPRITE_SIZE_8x16) {
+        // 8x16 sprites
+    } else {
+        // 8x8 sprites
+    }
+    return NULL;
+}
 
 const uint32_t *ppu_getFrameBuffer(void) {
     return &pixels[0];
@@ -79,12 +121,12 @@ void drawTile( const uint8_t *rawtile, const uint8_t *colors, int x, int y) {
     }
 }
 
-const uint8_t *getTile(uint8_t chr_idx, uint8_t idx) {
-    uint16_t base = (ppu_ctrl & 0x10) ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
+const uint8_t *getBGTile(uint8_t idx) {
+    uint16_t base = BG_PATTERN_TABLE_SEL ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
     return &cartridge_getCHR8k(0)[base + 16 * idx];
 }
 
-uint8_t getAttribute(const uint8_t *table, uint8_t x, uint8_t y) {
+uint8_t getAttribute(uint16_t nametable_baseaddr, uint8_t x, uint8_t y) {
     // 256x240, 8 Attribute bytes per line
 
     // +------------+------------+
@@ -108,7 +150,9 @@ uint8_t getAttribute(const uint8_t *table, uint8_t x, uint8_t y) {
 
     int byte_idx = (y/32)*8 + x/32;
     uint8_t bit_idx = ((y & 0x10) >> 2) + ((x & 0x10) >> 3);
-    uint8_t attr = (table[byte_idx] >> bit_idx) & 0x03;
+    uint16_t addr = nametable_baseaddr + byte_idx;
+    assert( addr < sizeof(vram));
+    uint8_t attr = (vram[addr] >> bit_idx) & 0x03;
     return attr << 2;
 }
 
@@ -126,7 +170,7 @@ void ppu_write(uint8_t addr, uint8_t dat) {
             oam_addr = dat;
             break;
         case 4: // OAMDATA, SPR-RAM I/O Register
-            oam[oam_addr++] = dat;
+            oam.raw[oam_addr++] = dat;
             break;
         case 5: // PPUSCROLL, VRAM Address Register #1 (W2)
             break;
@@ -157,7 +201,7 @@ uint8_t ppu_read(uint8_t addr) {
         case 3: // OAMADDR, SPR-RAM Address Register
             break;
         case 4: // OAMDATA, SPR-RAM I/O Register
-            val = oam[oam_addr];
+            val = oam.raw[oam_addr];
             break;
         case 5: // PPUSCROLL, VRAM Address Register #1 (W2)
             break;
@@ -174,13 +218,13 @@ uint8_t ppu_read(uint8_t addr) {
     return val;
 }
 
-const uint8_t *getNameTable(void) {
+uint16_t getNameTableAddr(void) {
     uint16_t addr = NAME_TABLE_0 | ((ppu_ctrl & 0x3) << 10);
-    return (uint8_t*)&vram[addr];
+    return addr;
 }
 
-const uint8_t *getAttributeTable(void) {
-    return getNameTable() + 0x3c0;
+uint16_t getAttributeTableAddr(void) {
+    return getNameTableAddr() + 0x3c0;
 }
 
 const uint8_t *getSpritePatternTable(void) {
@@ -194,11 +238,13 @@ const uint8_t *getBgPatternTable(void) {
     return (uint8_t*) (cartridge_getCHR8k(0) + ((ppu_ctrl & 0x10) ? 0x1000 : 0));
 }
 
-uint8_t getNameTableEntry(const uint8_t *nametable, int x, int y) {
+uint8_t getNameTableEntry(uint16_t nametable_baseaddr, int x, int y) {
     x = x / 8;
     y = y / 8;
     uint16_t idx = y * 32 + x;
-    return nametable[idx];
+    uint16_t addr = nametable_baseaddr + idx;
+    assert(addr < sizeof(vram));
+    return vram[addr];
 }
 
 bool ppu_interrupt(void) {
@@ -233,6 +279,7 @@ void ppu_tick(void) {
 
     if (x == 0) {
         // beginning of line
+        oam_collectSprites(y);
         if ( y == 0 ) {
             // beginning of frame
             ppu_status &= ~VBLANK;
@@ -256,19 +303,26 @@ void ppu_tick(void) {
                 if( BG_LEFT_ENABLED || x >= 8) {
                     if (relx == 0) {
                         // upperleft of tile
-                        uint8_t tile_idx = getNameTableEntry(getNameTable(), x, y);
-                        bgtile = getTile(PATTERN_TABLE_SEL, tile_idx);
-                        // printf("%dx%d Tile %d\n", x, y, tile_idx);
+                        uint8_t tile_idx = getNameTableEntry(getNameTableAddr(), x, y);
+                        bgtile = getBGTile(tile_idx);
                         if (x % 16 == 0) {
-                            attr = getAttribute( getAttributeTable(), x, y);
+                            attr = getAttribute( getAttributeTableAddr(), x, y);
                         }
                     }
                     bgpixel = SHOW_BG_ENABLED ? (attr | getTilePixel(bgtile, 8*rely+relx)) : 0;
                 }
             }
-
-            uint8_t sprite_pixel = SHOW_SPRITES_ENABLED ? 0 : 0;
-            uint8_t pixel = bgpixel;
+            int sprite_pixel = -1;
+            if (SHOW_SPRITES_ENABLED) {
+                if( SPRITES_LEFT_ENABLED || x >= 8) {
+                    const sprite_t *sprite = oam_getSprite(x);
+                    if (sprite) {
+                        const uint8_t *sprite_tile = get_spriteTile(sprite->index);
+                        sprite_pixel = getTilePixel(sprite_tile, 8*rely+relx);
+                    }
+                }
+            }
+            uint8_t pixel = sprite_pixel > 0 ? sprite_pixel : bgpixel;
             setpixel(x, y, pixel);
         }
     } else {

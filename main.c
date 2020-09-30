@@ -181,58 +181,7 @@ int main(int argc, char *argv[]) {
     draw();
     atexit(onExit);
     cartridge_loadROM("rom/DonkeyKong.nes");
-
-#if 0
-    writebus(PPUADDR, NTABLE0 >> 8);
-    writebus(PPUADDR, NTABLE0 & 0xff);
-    for( int i = 0; i<256; i++) {
-        writebus(PPUDATA, i+1);
-    }
-
-    writebus(PPUMASK, 0x0a);
-    writebus(PPUCTRL, 0x90);
-
-    bool quit = false;
-    SDL_Event e2;
-    while (!quit) {
-        while (SDL_PollEvent(&e2)) {
-            if (e2.type == SDL_QUIT) {
-                quit = true;
-            }
-            if (e2.type == SDL_KEYDOWN) {
-                if (e2.key.keysym.sym == SDLK_ESCAPE) {
-                    quit = true;
-                }
-                if (e2.key.keysym.sym == SDLK_SPACE) {
-                    static int color = 0;
-                    extern uint32_t pixels[];
-                    extern uint32_t palette[];
-                    static int x = 0;
-                    pixels[x++] = palette[color];
-                    printf("%d\n", color);
-                    color = (color + 1) % 64;
-                    draw();
-                }
-            }
-            if (e2.type == SDL_WINDOWEVENT ) {
-                if (e2.window.event == SDL_WINDOWEVENT_RESIZED || e2.window.event == SDL_WINDOWEVENT_SHOWN) {
-                }
-                if (e2.window.event == SDL_WINDOWEVENT_EXPOSED ) {
-                }
-                if (e2.window.event == SDL_WINDOWEVENT_CLOSE) {
-                    quit = true;
-                }
-                draw();
-            }
-        } // while (SDL_PollEvent(&e))
-        // ppu_tick();
-        // if( ppu_interrupt() ) {
-        //     draw();
-        // }
-    }
-    return 0;
-
-#endif
+    // cartridge_loadROM("rom/nestest.nes");
 
     d6502_t cpu;
     d6502_init(&cpu);
@@ -302,6 +251,8 @@ int main(int argc, char *argv[]) {
         } // while (SDL_PollEvent(&e))
 
         d6502_disassemble(&cpu, cpu.pc, asmcode);
+
+#if 0
         get_raw_instruction(&cpu, raw);
         print_regs(&cpu);
         do {
@@ -327,6 +278,7 @@ int main(int argc, char *argv[]) {
         sprintf(logstr+p, "A:%02X X:%02X Y:%02X P:%02X SP:%02X\n", cpu.a, cpu.x, cpu.y, cpu.st, cpu.sp);
         fwrite(logstr, strlen(logstr), 1, log);
         fflush(log);
+#endif
 #endif
         int clock = 0;
         while(1) {

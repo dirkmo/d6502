@@ -41,7 +41,7 @@ static void execute(d6502_t *cpu) {
     if(!cpu->nmi && !cpu->interrupt) { // might skip output on race condition
         //printf("%s %s\n", cpu->instruction->mnemonic, cpu->disassemble);
     } else {
-        printf("%s\n", cpu->nmi ? "NMI" : "interrupt");
+        // printf("%s\n", cpu->nmi ? "NMI" : "interrupt");
     }
     
     cpu->instruction->operation(cpu);
