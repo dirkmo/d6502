@@ -91,11 +91,31 @@ const uint8_t *get_spriteTile(uint8_t idx) {
         // 8x16 sprites
         tableaddr = (idx & 1) ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
         idx = idx & 0xFE; // bottom half of sprite follows
+        assert(1);
     } else {
         // 8x8 sprites
         tableaddr = SPRITE_PATTERN_TABLE_SEL ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
     }
     return &cartridge_getCHR8k(0)[tableaddr + 16 * idx];
+}
+
+uint8_t getSpriteTilePixel(const uint8_t *rawtile, uint8_t x, uint8_t y, uint8_t attr) {
+    if (!rawtile) {
+        return 0;
+    }
+    if ((attr & 0x40)) {
+        // flip horizontally
+        x = 7 - x;
+    }
+    if ((attr & 0x80)) {
+        // flip vertically
+        y = 7 - y;
+    }
+    int bitidx = x;
+    int byteidx = y;
+    uint8_t b1 = (rawtile[byteidx] >> (7-bitidx)) & 1;
+    uint8_t b2 = (rawtile[byteidx+8] >> (7-bitidx)) & 1;
+    return b1 | (b2 << 1);
 }
 
 const uint32_t *ppu_getFrameBuffer(void) {
@@ -111,7 +131,7 @@ void setpixel( int x, int y, uint8_t color ) {
     pixels[p] = nescolors[vram[0x3f00+color]];
 }
 
-uint8_t getTilePixel(const uint8_t *rawtile, uint8_t idx) {
+uint8_t getBGTilePixel(const uint8_t *rawtile, uint8_t idx) {
     if (!rawtile) {
         return 0;
     }
@@ -122,9 +142,9 @@ uint8_t getTilePixel(const uint8_t *rawtile, uint8_t idx) {
     return b1 | (b2 << 1);
 }
 
-void drawTile( const uint8_t *rawtile, const uint8_t *colors, int x, int y) {
+void drawBGTile( const uint8_t *rawtile, const uint8_t *colors, int x, int y) {
     for ( int i = 0; i < 64; i++ ) {
-        uint8_t color = colors[getTilePixel(rawtile, i)] * 3;
+        uint8_t color = colors[getBGTilePixel(rawtile, i)] * 3;
         setpixel(x+i%8, y+i/8, color);
     }
 }
@@ -261,7 +281,7 @@ bool ppu_interrupt(void) {
 
 void print_tile(const uint8_t *tile) {
     for ( int i = 0; i<64; i++) {
-        printf("%d%s", getTilePixel(tile, i), ((i % 8) == 7) ? "\n" : "");
+        printf("%d%s", getBGTilePixel(tile, i), ((i % 8) == 7) ? "\n" : "");
     }
 }
 
@@ -317,7 +337,7 @@ void ppu_tick(void) {
                             attr = getAttribute( getAttributeTableAddr(), x, y);
                         }
                     }
-                    bgpixel = SHOW_BG_ENABLED ? (attr | getTilePixel(bgtile, 8*rely+relx)) : 0;
+                    bgpixel = SHOW_BG_ENABLED ? (attr | getBGTilePixel(bgtile, 8*rely+relx)) : 0;
                 }
             }
             int sprite_pixel = -1;
@@ -326,7 +346,7 @@ void ppu_tick(void) {
                     const sprite_t *sprite = oam_getSprite(x);
                     if (sprite) {
                         const uint8_t *sprite_tile = get_spriteTile(sprite->index);
-                        sprite_pixel = getTilePixel(sprite_tile, 8*(y-sprite->y) + (x-sprite->x));
+                        sprite_pixel = getSpriteTilePixel(sprite_tile, x - sprite->x, y - sprite->y, sprite->attr);
                     }
                 }
             }
