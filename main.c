@@ -180,6 +180,7 @@ int main(int argc, char *argv[]) {
     }
     draw();
     atexit(onExit);
+    // cartridge_loadROM("rom/Tetris.nes");
     cartridge_loadROM("rom/DonkeyKong.nes");
     // cartridge_loadROM("rom/nestest.nes");
 

@@ -10,6 +10,11 @@ const uint8_t *cartridge_getCHR8k(uint8_t chr_idx) {
     return cartridge.rom_chr8k + 8192 * chr_idx;
 }
 
+uint8_t mapper0_readPatternTable(uint16_t addr) {
+    assert(addr < 8*1024);
+    return cartridge.rom_chr8k[addr];
+}
+
 void cartridge_write(uint16_t addr, uint8_t dat) {
     switch(addr) {
         case 0x8000 ... 0xffff:
@@ -22,7 +27,7 @@ uint8_t cartridge_read(uint16_t addr) {
     uint8_t dat = 0;
     switch(addr) {
         case 0x8000 ... 0xbfff:
-            dat = cartridge.rom_prg16k[addr - cartridge.header.nCHRROM8k == 1 ? 0xc000 : 0x8000];
+            dat = cartridge.rom_prg16k[addr - #0x8000];
         case 0xC000 ... 0xffff:
             dat = cartridge.rom_prg16k[addr - 0xc000];
             break;
@@ -42,6 +47,8 @@ void cartridge_loadROM(const char *fn) {
     fread(cartridge.rom_prg16k, cartridge.header.nPRGROM16k, 16*1024, f);
     fread(cartridge.rom_chr8k, cartridge.header.nCHRROM8k, 8*1024, f);
     fclose(f);
+
+    cartridge.readPatternTable = mapper0_readPatternTable;
 }
 
 void cartridge_cleanup(void) {

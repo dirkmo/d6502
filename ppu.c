@@ -131,27 +131,26 @@ void setpixel( int x, int y, uint8_t color ) {
     pixels[p] = nescolors[vram[0x3f00+color]];
 }
 
-uint8_t getBGTilePixel(const uint8_t *rawtile, uint8_t idx) {
-    if (!rawtile) {
-        return 0;
-    }
+uint8_t getBGTilePixel(uint16_t addr, uint8_t idx) {
     int bitidx = idx % 8;
     int byteidx = (idx / 8);
-    uint8_t b1 = (rawtile[byteidx] >> (7-bitidx)) & 1;
-    uint8_t b2 = (rawtile[byteidx+8] >> (7-bitidx)) & 1;
+    uint8_t chr1 = cartridge.readPatternTable(addr+byteidx);
+    uint8_t chr2 = cartridge.readPatternTable(addr+byteidx+8);
+    uint8_t b1 = (chr1 >> (7-bitidx)) & 1;
+    uint8_t b2 = (chr2 >> (7-bitidx)) & 1;
     return b1 | (b2 << 1);
 }
 
-void drawBGTile( const uint8_t *rawtile, const uint8_t *colors, int x, int y) {
-    for ( int i = 0; i < 64; i++ ) {
-        uint8_t color = colors[getBGTilePixel(rawtile, i)] * 3;
-        setpixel(x+i%8, y+i/8, color);
-    }
-}
+// void drawBGTile( const uint8_t *rawtile, const uint8_t *colors, int x, int y) {
+//     for ( int i = 0; i < 64; i++ ) {
+//         uint8_t color = colors[getBGTilePixel(rawtile, i)] * 3;
+//         setpixel(x+i%8, y+i/8, color);
+//     }
+// }
 
-const uint8_t *getBGTile(uint8_t idx) {
+const uint16_t getBGTileAddr(uint8_t idx) {
     uint16_t base = BG_PATTERN_TABLE_SEL ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
-    return &cartridge_getCHR8k(0)[base + 16 * idx];
+    return base + 16 * idx;
 }
 
 uint8_t getAttribute(uint16_t nametable_baseaddr, uint8_t x, uint8_t y) {
@@ -255,17 +254,6 @@ uint16_t getAttributeTableAddr(void) {
     return getNameTableAddr() + 0x3c0;
 }
 
-const uint8_t *getSpritePatternTable(void) {
-    uint16_t addr = (ppu_ctrl & 0x08) ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
-    return (uint8_t*)&vram[addr];
-}
-
-const uint8_t *getBgPatternTable(void) {
-    // uint16_t addr = (ppu_ctrl & 0x10) ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
-    // return (uint8_t*)&vram[addr];
-    return (uint8_t*) (cartridge_getCHR8k(0) + ((ppu_ctrl & 0x10) ? 0x1000 : 0));
-}
-
 uint8_t getNameTableEntry(uint16_t nametable_baseaddr, int x, int y) {
     x = x / 8;
     y = y / 8;
@@ -279,12 +267,6 @@ bool ppu_interrupt(void) {
     return (ppu_ctrl & 0x80) && interrupt;
 }
 
-void print_tile(const uint8_t *tile) {
-    for ( int i = 0; i<64; i++) {
-        printf("%d%s", getBGTilePixel(tile, i), ((i % 8) == 7) ? "\n" : "");
-    }
-}
-
 bool ppu_should_draw(void) {
     static uint32_t last = 0;
     if (tick > last + TICKS_PER_FRAME) {
@@ -295,7 +277,7 @@ bool ppu_should_draw(void) {
 }
 
 void ppu_tick(void) {
-    static const uint8_t *bgtile;
+    static uint16_t bgtile_addr;
     static uint8_t attr = 0;
 
     uint32_t frame_pixel_idx = tick % TICKS_PER_FRAME;
@@ -332,12 +314,12 @@ void ppu_tick(void) {
                     if (relx == 0) {
                         // upperleft of tile
                         uint8_t tile_idx = getNameTableEntry(getNameTableAddr(), x, y);
-                        bgtile = getBGTile(tile_idx);
+                        bgtile_addr = getBGTileAddr(tile_idx);
                         if (x % 16 == 0) {
                             attr = getAttribute( getAttributeTableAddr(), x, y);
                         }
                     }
-                    bgpixel = SHOW_BG_ENABLED ? (attr | getBGTilePixel(bgtile, 8*rely+relx)) : 0;
+                    bgpixel = SHOW_BG_ENABLED ? (attr | getBGTilePixel(bgtile_addr, 8*rely+relx)) : 0;
                 }
             }
             int sprite_pixel = -1;
