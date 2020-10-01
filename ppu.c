@@ -85,7 +85,7 @@ const sprite_t *oam_getSprite(uint8_t x) {
     return NULL;
 }
 
-const uint8_t *get_spriteTile(uint8_t idx) {
+const uint16_t get_spriteTileAddr(uint8_t idx) {
     uint16_t tableaddr;
     if (SPRITE_SIZE_8x16) {
         // 8x16 sprites
@@ -96,13 +96,10 @@ const uint8_t *get_spriteTile(uint8_t idx) {
         // 8x8 sprites
         tableaddr = SPRITE_PATTERN_TABLE_SEL ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
     }
-    return &cartridge_getCHR8k(0)[tableaddr + 16 * idx];
+    return tableaddr + 16 * idx;
 }
 
-uint8_t getSpriteTilePixel(const uint8_t *rawtile, uint8_t x, uint8_t y, uint8_t attr) {
-    if (!rawtile) {
-        return 0;
-    }
+uint8_t getSpriteTilePixel(uint16_t tile_addr, uint8_t x, uint8_t y, uint8_t attr) {
     if ((attr & 0x40)) {
         // flip horizontally
         x = 7 - x;
@@ -113,8 +110,10 @@ uint8_t getSpriteTilePixel(const uint8_t *rawtile, uint8_t x, uint8_t y, uint8_t
     }
     int bitidx = x;
     int byteidx = y;
-    uint8_t b1 = (rawtile[byteidx] >> (7-bitidx)) & 1;
-    uint8_t b2 = (rawtile[byteidx+8] >> (7-bitidx)) & 1;
+    uint8_t chr1 = cartridge.readPatternTable(tile_addr + byteidx);
+    uint8_t chr2 = cartridge.readPatternTable(tile_addr + byteidx + 8);
+    uint8_t b1 = (chr1 >> (7-bitidx)) & 1;
+    uint8_t b2 = (chr2 >> (7-bitidx)) & 1;
     return b1 | (b2 << 1);
 }
 
@@ -327,8 +326,8 @@ void ppu_tick(void) {
                 if( SPRITES_LEFT_ENABLED || x >= 8) {
                     const sprite_t *sprite = oam_getSprite(x);
                     if (sprite) {
-                        const uint8_t *sprite_tile = get_spriteTile(sprite->index);
-                        sprite_pixel = getSpriteTilePixel(sprite_tile, x - sprite->x, y - sprite->y, sprite->attr);
+                        uint16_t sprite_tile_addr = get_spriteTileAddr(sprite->index);
+                        sprite_pixel = getSpriteTilePixel(sprite_tile_addr, x - sprite->x, y - sprite->y, sprite->attr);
                     }
                 }
             }
