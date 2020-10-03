@@ -12,13 +12,6 @@
 #define PATTERN_TABLE_0 0x0000
 #define PATTERN_TABLE_1 0x1000
 #define NAME_TABLE_0 0x2000
-#define NAME_TABLE_1 0x2400
-#define NAME_TABLE_2 0x2800
-#define NAME_TABLE_3 0x2c00
-#define ATTR_TABLE_0 (NAME_TABLE_0 + 0x3c0)
-#define ATTR_TABLE_1 (NAME_TABLE_1 + 0x3c0)
-#define ATTR_TABLE_2 (NAME_TABLE_2 + 0x3c0)
-#define ATTR_TABLE_3 (NAME_TABLE_3 + 0x3c0)
 
 #define BACKGROUND_COLOR (vram[0x3f00])
 
@@ -139,13 +132,6 @@ uint8_t getBGTilePixel(uint16_t addr, uint8_t idx) {
     uint8_t b2 = (chr2 >> (7-bitidx)) & 1;
     return b1 | (b2 << 1);
 }
-
-// void drawBGTile( const uint8_t *rawtile, const uint8_t *colors, int x, int y) {
-//     for ( int i = 0; i < 64; i++ ) {
-//         uint8_t color = colors[getBGTilePixel(rawtile, i)] * 3;
-//         setpixel(x+i%8, y+i/8, color);
-//     }
-// }
 
 const uint16_t getBGTileAddr(uint8_t idx) {
     uint16_t base = BG_PATTERN_TABLE_SEL ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
