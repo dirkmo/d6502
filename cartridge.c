@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#define NT_MIRROR_H (!cartridge.header.Vh)
+#define NT_MIRROR_V (cartridge.header.Vh)
+
 cartridge_t cartridge = { 0 };
 
 static uint8_t mapper0_ppu_read(uint16_t addr) {
@@ -13,10 +16,16 @@ static uint8_t mapper0_ppu_read(uint16_t addr) {
             val = cartridge.rom_chr8k[addr];
             break;
         case 0x2000 ... 0x2fff: // nametable 0-3
+            if (NT_MIRROR_V) { // $2000 = $2800, $2400 = $2C00
+                addr &= ~0x0800;
+            } else if (NT_MIRROR_H) { // $2000 = $2400, $2800 = $2C00
+                addr &= ~0x0400;
+            }
             val = vram[addr];
             break;
         case 0x3f00 ... 0x3fff: // palette RAM
-            val = vram[0x3f00 | (addr & 0x1f)];
+            addr &= 0xff1f;
+            val = vram[addr];
             break;
         default: assert(1);
     }
@@ -30,10 +39,16 @@ static void mapper0_ppu_write(uint16_t addr, uint8_t dat) {
         case 0x0000 ... 0x1fff: // pattern table 1+2 ROM
             break;
         case 0x2000 ... 0x2fff: // nametable 0-3
+            if (NT_MIRROR_V) { // $2000 = $2800, $2400 = $2C00
+                addr &= ~0x0800;
+            } else if (NT_MIRROR_H) { // $2000 = $2400, $2800 = $2C00
+                addr &= ~0x0400;
+            }
             vram[addr] = dat;
             break;
         case 0x3f00 ... 0x3fff: // palette RAM
-            vram[0x3f00 | (addr & 0x1f)] = dat;
+            addr &= 0xff1f;
+            vram[addr] = dat;
             break;
         default: assert(1);
     }
@@ -80,11 +95,20 @@ void cartridge_cpu_write(uint16_t addr, uint8_t dat) {
 
 void cartridge_loadROM(const char *fn) {
     FILE *f = fopen(fn, "r");
+    if (f == NULL) {
+        printf("ERROR: File not found.\n");
+        exit(1);
+    }
     fread(&cartridge.header, 1, sizeof(inesheader_t), f);
     uint8_t mapper = cartridge.header.mapperlo | ( cartridge.header.mapperhi << 4);
-    printf("mapper %d\n", mapper);
     printf("16k pages prg rom: %d\n", cartridge.header.nPRGROM16k);
     printf("8k pages chr rom: %d\n", cartridge.header.nCHRROM8k);
+    printf("mapper %d\n", mapper);
+    if( cartridge.header.four ) {
+        printf("No nametable mirroring, four-screen\n");
+    } else {
+        printf("%s nametable mirroring\n", NT_MIRROR_V ? "Vertical" : "Horizontal");
+    }
     cartridge.rom_prg16k = (uint8_t*)malloc(1024*16 * cartridge.header.nPRGROM16k);
     cartridge.rom_chr8k = (uint8_t*)malloc(1024*8 * cartridge.header.nCHRROM8k);
     fread(cartridge.rom_prg16k, cartridge.header.nPRGROM16k, 16*1024, f);

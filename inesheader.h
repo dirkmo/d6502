@@ -35,10 +35,10 @@ typedef struct {
     // byte 5
     uint8_t nCHRROM8k;
     // byte 6
-    unsigned Vh : 1;
+    unsigned Vh : 1; // 1:vertical, 0: horizontal
     unsigned bat : 1;
     unsigned trainer : 1;
-    unsigned four : 1;
+    unsigned four : 1; // 1: ignore Vh, four screen
     unsigned mapperlo : 4;
     // byte 7
     unsigned vs : 1;
