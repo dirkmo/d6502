@@ -5,28 +5,55 @@
 
 cartridge_t cartridge = { 0 };
 
-uint8_t mapper0_ppu_read(uint16_t addr) {
-    assert(addr < 8*1024);
-    return cartridge.rom_chr8k[addr];
-}
-
-void mapper0_ppu_write(uint16_t addr, uint8_t dat) {
-
-}
-
-void mapper0_cpu_write(uint16_t addr, uint8_t dat) {
+static uint8_t mapper0_ppu_read(uint16_t addr) {
+    extern uint8_t vram[0x4000];
+    uint8_t val = 0;
     switch(addr) {
-        case 0x8000 ... 0xffff:
+        case 0x0000 ... 0x1fff: // pattern table 1+2 ROM
+            val = cartridge.rom_chr8k[addr];
             break;
-        default:;
+        case 0x2000 ... 0x2fff: // nametable 0-3
+            val = vram[addr];
+            break;
+        case 0x3f00 ... 0x3fff: // palette RAM
+            val = vram[0x3f00 | (addr & 0x1f)];
+            break;
+        default: assert(1);
+    }
+    return val;
+}
+
+static void mapper0_ppu_write(uint16_t addr, uint8_t dat) {
+    extern uint8_t vram[0x4000];
+    uint8_t val = 0;
+    switch(addr) {
+        case 0x0000 ... 0x1fff: // pattern table 1+2 ROM
+            break;
+        case 0x2000 ... 0x2fff: // nametable 0-3
+            vram[addr] = dat;
+            break;
+        case 0x3f00 ... 0x3fff: // palette RAM
+            vram[0x3f00 | (addr & 0x1f)] = dat;
+            break;
+        default: assert(1);
     }
 }
 
-uint8_t mapper0_cpu_read(uint16_t addr) {
+static void mapper0_cpu_write(uint16_t addr, uint8_t dat) {
+    switch(addr) {
+        case 0x8000 ... 0xffff:
+            break;
+        default: 
+            assert(1);
+    }
+}
+
+static uint8_t mapper0_cpu_read(uint16_t addr) {
     uint8_t dat = 0;
     switch(addr) {
         case 0x8000 ... 0xbfff:
             dat = cartridge.rom_prg16k[addr - 0x8000];
+            break;
         case 0xC000 ... 0xffff:
             dat = cartridge.rom_prg16k[addr - 0xc000];
             break;
@@ -63,13 +90,13 @@ void cartridge_loadROM(const char *fn) {
     fread(cartridge.rom_prg16k, cartridge.header.nPRGROM16k, 16*1024, f);
     fread(cartridge.rom_chr8k, cartridge.header.nCHRROM8k, 8*1024, f);
     fclose(f);
-
     if (mapper == 0) {
         cartridge.mapper_ppu_read = mapper0_ppu_read;
         cartridge.mapper_ppu_write = mapper0_ppu_write;
         cartridge.mapper_cpu_read = mapper0_cpu_read;
         cartridge.mapper_cpu_write = mapper0_cpu_write;
     } else {
+        printf("ERROR: Mapper %d not supported\n", mapper);
         exit(1);
     }
 }

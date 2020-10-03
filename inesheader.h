@@ -30,16 +30,21 @@
 
 typedef struct {
     char magic[4];
+    // byte 4
     uint8_t nPRGROM16k;
+    // byte 5
     uint8_t nCHRROM8k;
+    // byte 6
     unsigned Vh : 1;
     unsigned bat : 1;
     unsigned trainer : 1;
     unsigned four : 1;
     unsigned mapperlo : 4;
+    // byte 7
     unsigned vs : 1;
     unsigned res1 : 3;
     unsigned mapperhi : 4; 
+    // byte 8
     uint8_t nRAMbanks8k;
     uint8_t pal;
     uint8_t reserved[6];
