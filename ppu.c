@@ -110,8 +110,8 @@ uint8_t getSpriteTilePixel(uint16_t tile_addr, uint8_t x, uint8_t y, uint8_t att
     }
     int bitidx = x;
     int byteidx = y;
-    uint8_t chr1 = cartridge.readPatternTable(tile_addr + byteidx);
-    uint8_t chr2 = cartridge.readPatternTable(tile_addr + byteidx + 8);
+    uint8_t chr1 = cartridge_ppu_read(tile_addr + byteidx);
+    uint8_t chr2 = cartridge_ppu_read(tile_addr + byteidx + 8);
     uint8_t b1 = (chr1 >> (7-bitidx)) & 1;
     uint8_t b2 = (chr2 >> (7-bitidx)) & 1;
     return b1 | (b2 << 1);
@@ -133,8 +133,8 @@ void setpixel( int x, int y, uint8_t color ) {
 uint8_t getBGTilePixel(uint16_t addr, uint8_t idx) {
     int bitidx = idx % 8;
     int byteidx = (idx / 8);
-    uint8_t chr1 = cartridge.readPatternTable(addr+byteidx);
-    uint8_t chr2 = cartridge.readPatternTable(addr+byteidx+8);
+    uint8_t chr1 = cartridge_ppu_read(addr+byteidx);
+    uint8_t chr2 = cartridge_ppu_read(addr+byteidx+8);
     uint8_t b1 = (chr1 >> (7-bitidx)) & 1;
     uint8_t b2 = (chr2 >> (7-bitidx)) & 1;
     return b1 | (b2 << 1);
@@ -178,7 +178,7 @@ uint8_t getAttribute(uint16_t nametable_baseaddr, uint8_t x, uint8_t y) {
     uint8_t bit_idx = ((y & 0x10) >> 2) + ((x & 0x10) >> 3);
     uint16_t addr = nametable_baseaddr + byte_idx;
     assert( addr < sizeof(vram));
-    uint8_t attr = (vram[addr] >> bit_idx) & 0x03;
+    uint8_t attr = (cartridge_ppu_read(addr) >> bit_idx) & 0x03;
     return attr << 2;
 }
 
@@ -204,7 +204,7 @@ void ppu_write(uint8_t addr, uint8_t dat) {
             ppuaddr = ((ppuaddr & 0x3f) << 8) | dat;
             break;
         case 7: // PPUDATA, VRAM I/O Register
-            vram[ppuaddr] = dat;
+            cartridge_ppu_write(ppuaddr, dat);
             ppuaddr += (ppu_ctrl & 0x04) ? 32 : 1;
             break;
         default:;
@@ -235,7 +235,7 @@ uint8_t ppu_read(uint8_t addr) {
             val = ppuaddr;
             break;
         case 7: // PPUDATA, VRAM I/O Register
-            val = vram[ppuaddr];
+            val = cartridge_ppu_read(ppuaddr);
             ppuaddr += (ppu_ctrl & 0x04) ? 32 : 1;
             break;
         default:
@@ -259,7 +259,7 @@ uint8_t getNameTableEntry(uint16_t nametable_baseaddr, int x, int y) {
     uint16_t idx = y * 32 + x;
     uint16_t addr = nametable_baseaddr + idx;
     assert(addr < sizeof(vram));
-    return vram[addr];
+    return cartridge_ppu_read(addr);
 }
 
 bool ppu_interrupt(void) {

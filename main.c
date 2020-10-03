@@ -69,7 +69,7 @@ void writebus(uint16_t addr, uint8_t dat) {
             apu_write(addr & 0x1f, dat );
             break;
         case 0x6000 ... 0xffff: // cartridge
-            cartridge_write(addr, dat);
+            cartridge_cpu_write(addr, dat);
             break;
         default:;
     }
@@ -84,7 +84,7 @@ uint8_t readbus(uint16_t addr) {
         case 0x4000 ... 0x401f: // APU + IO
             return apu_read(addr & 0x1f);
         case 0x6000 ... 0xffff: // cartridge
-            return cartridge_read(addr);
+            return cartridge_cpu_read(addr);
         default: ;
     }
     return 0;
