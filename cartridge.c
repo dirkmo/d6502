@@ -24,7 +24,11 @@ static uint8_t mapper0_ppu_read(uint16_t addr) {
             val = vram[addr];
             break;
         case 0x3f00 ... 0x3fff: // palette RAM
-            addr &= 0xff1f;
+            if((addr%4) == 0) {
+                addr = 0x3f00;
+            } else {
+                addr &= 0xff1f;
+            }
             val = vram[addr];
             break;
         default: assert(1);
@@ -34,7 +38,6 @@ static uint8_t mapper0_ppu_read(uint16_t addr) {
 
 static void mapper0_ppu_write(uint16_t addr, uint8_t dat) {
     extern uint8_t vram[0x4000];
-    uint8_t val = 0;
     switch(addr) {
         case 0x0000 ... 0x1fff: // pattern table 1+2 ROM
             break;
@@ -47,7 +50,11 @@ static void mapper0_ppu_write(uint16_t addr, uint8_t dat) {
             vram[addr] = dat;
             break;
         case 0x3f00 ... 0x3fff: // palette RAM
-            addr &= 0xff1f;
+            if((addr%4) == 0) {
+                addr = 0x3f00;
+            } else {
+                addr &= 0xff1f;
+            }
             vram[addr] = dat;
             break;
         default: assert(1);
@@ -78,10 +85,12 @@ static uint8_t mapper0_cpu_read(uint16_t addr) {
 }
 
 uint8_t cartridge_ppu_read(uint16_t addr) {
+    assert(addr < 0x4000);
     return cartridge.mapper_ppu_read(addr);
 }
 
 void cartridge_ppu_write(uint16_t addr, uint8_t dat) {
+    assert(addr < 0x4000);
     cartridge.mapper_ppu_write(addr, dat);
 }
 

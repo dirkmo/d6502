@@ -72,6 +72,7 @@ void oam_collectSprites(uint8_t y) {
 const sprite_t *oam_getSprite(uint8_t x) {
     for(int i = 0; i<8; i++) {
         if( (x >= local_sprites[i].x) && (x < (local_sprites[i].x+8))) {
+            // TODO: take sprite with first opaque pixel
             return &local_sprites[i];
         }
     }
@@ -120,7 +121,11 @@ void setpixel( int x, int y, uint8_t color ) {
         printf("x: %d, y: %d\n", x, y);
         assert(p < sizeof(pixels));
     }
-    pixels[p] = nescolors[vram[0x3f00+color]];
+    if ((color % 4) == 0) {
+        color = 0; // backdrop color
+    }
+    uint16_t addr = 0x3f00 + color;
+    pixels[p] = nescolors[vram[addr]];
 }
 
 uint8_t getBGTilePixel(uint16_t addr, uint8_t idx) {
@@ -244,8 +249,18 @@ uint8_t getNameTableEntry(uint16_t nametable_baseaddr, int x, int y) {
     y = y / 8;
     uint16_t idx = y * 32 + x;
     uint16_t addr = nametable_baseaddr + idx;
-    assert(addr < sizeof(vram));
     return cartridge_ppu_read(addr);
+}
+
+static uint8_t pixel_prio(const sprite_t *sprite, uint8_t sprcol, uint8_t bgcol) {
+    // attr bit 5: Sprite priority (0: in front of background; 1: behind background)
+    // col % 4 == 0 --> transparent pixel (backdrop color)
+    if (sprite) {
+        if (((sprite->attr & 0x20) == 0) && ((sprcol % 4) != 0)) {
+            return sprcol;
+        }
+    }
+    return bgcol;
 }
 
 bool ppu_interrupt(void) {
@@ -308,16 +323,17 @@ void ppu_tick(void) {
                 }
             }
             int sprite_pixel = -1;
+            const sprite_t *sprite = NULL;
             if (SHOW_SPRITES_ENABLED) {
                 if( SPRITES_LEFT_ENABLED || x >= 8) {
-                    const sprite_t *sprite = oam_getSprite(x);
+                    sprite = oam_getSprite(x);
                     if (sprite) {
                         uint16_t sprite_tile_addr = get_spriteTileAddr(sprite->index);
                         sprite_pixel = getSpriteTilePixel(sprite_tile_addr, x - sprite->x, y - sprite->y, sprite->attr);
                     }
                 }
             }
-            uint8_t pixel = (sprite_pixel > 0) ? sprite_pixel : bgpixel;
+            uint8_t pixel = pixel_prio(sprite, sprite_pixel, bgpixel);
             setpixel(x, y, pixel);
         }
     } else {

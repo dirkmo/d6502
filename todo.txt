@@ -1,0 +1,5 @@
+# Sprite-0 hit detection
+
+# scrolling
+
+# 8x16 sprites
