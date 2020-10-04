@@ -7,7 +7,6 @@
 #include "nescolors.h"
 #include "cartridge.h"
 
-#define VBLANK 0x80
 #define TICKS_PER_FRAME (TOTAL_FRAME_W * TOTAL_FRAME_H)
 #define PATTERN_TABLE_0 0x0000
 #define PATTERN_TABLE_1 0x1000
@@ -30,6 +29,11 @@
 #define EMPHASIZE_GREEN_ENABLED (ppu_mask & 0x40)
 #define EMPHASIZE_BLUE_ENABLED  (ppu_mask & 0x80)
 
+// ppu_status
+#define VBLANK_MASK 0x80
+#define SPRITE0HIT_MASK 0x40
+
+
 typedef struct {
     uint8_t y;
     uint8_t index;
@@ -40,6 +44,7 @@ typedef struct {
 static uint32_t tick = 0;
 /* static*/ uint32_t pixels[FRAME_W * FRAME_H];
 static bool interrupt = false;
+static bool sprite0hit = false;
 
 uint8_t ppu_ctrl = 0;
 uint8_t ppu_mask = 0;
@@ -213,7 +218,7 @@ uint8_t ppu_read(uint8_t addr) {
             break;
         case 2: // PPUSTATUS, PPU Status Register
             val = ppu_status;
-            ppu_status &= ~VBLANK;
+            ppu_status &= ~VBLANK_MASK;
             break;
         case 3: // OAMADDR, SPR-RAM Address Register
             break;
@@ -276,6 +281,17 @@ bool ppu_should_draw(void) {
     return false;
 }
 
+void sprite0hit_handler(int x, int y, uint8_t bgcol, uint8_t sprcol) {
+    if (!sprite0hit) {
+        if (SHOW_BG_ENABLED && SHOW_SPRITES_ENABLED) {
+            if (x > 7 || SPRITES_LEFT_ENABLED || BG_LEFT_ENABLED) {
+                ppu_status |= SPRITE0HIT_MASK;
+                sprite0hit = true;
+            }
+        }
+    }
+}
+
 void ppu_tick(void) {
     static uint16_t bgtile_addr;
     static uint8_t attr = 0;
@@ -292,14 +308,16 @@ void ppu_tick(void) {
         oam_collectSprites(y);
         if ( y == 0 ) {
             // beginning of frame
-            ppu_status &= ~VBLANK;
+            ppu_status &= ~VBLANK_MASK;
+            ppu_status &= ~SPRITE0HIT_MASK;
+            sprite0hit = false;
             interrupt = false;
         }
     } else {
         if (x == TOTAL_FRAME_W-1) {
             if (y == FRAME_H-1) {
                 // last visible line done
-                ppu_status |= VBLANK;
+                ppu_status |= VBLANK_MASK;
                 interrupt = true;
             }
         }
@@ -335,6 +353,9 @@ void ppu_tick(void) {
             }
             uint8_t pixel = pixel_prio(sprite, sprite_pixel, bgpixel);
             setpixel(x, y, pixel);
+            if (sprite_index == 0) {
+                sprite0hit_handler(x, y, bgpixel, sprite_pixel);
+            }
         }
     } else {
         // HBLANK
