@@ -60,25 +60,26 @@ union {
     sprite_t sprite[0x100/4];
 } oam;
 
-sprite_t local_sprites[8];
+uint8_t local_sprites[8];
 
 void oam_collectSprites(uint8_t y) {
     int s = 0;
     for(int i = 0; i < 64 && s < 8; i++) {
         if ((y >= oam.sprite[i].y) && (y < oam.sprite[i].y+8)) {
-            local_sprites[s++] = oam.sprite[i];
+            local_sprites[s++] = i;
         }
     }
     for (; s < 8; s++) {
-        local_sprites[s] = (sprite_t){ 0xff, 0xff, 0xff, 0xff };
+        local_sprites[s] = 0xff;
     }
 }
 
 const sprite_t *oam_getSprite(uint8_t x) {
     for(int i = 0; i<8; i++) {
-        if( (x >= local_sprites[i].x) && (x < (local_sprites[i].x+8))) {
+        const sprite_t *sprite = &oam.sprite[local_sprites[i]];
+        if( (x >= sprite->x) && (x < (sprite->x+8))) {
             // TODO: take sprite with first opaque pixel
-            return &local_sprites[i];
+            return sprite;
         }
     }
     return NULL;
@@ -353,9 +354,9 @@ void ppu_tick(void) {
             }
             uint8_t pixel = pixel_prio(sprite, sprite_pixel, bgpixel);
             setpixel(x, y, pixel);
-            if (sprite_index == 0) {
-                sprite0hit_handler(x, y, bgpixel, sprite_pixel);
-            }
+            // if (sprite_index == 0) {
+            //     sprite0hit_handler(x, y, bgpixel, sprite_pixel);
+            // }
         }
     } else {
         // HBLANK
