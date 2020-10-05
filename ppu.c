@@ -74,15 +74,15 @@ void oam_collectSprites(uint8_t y) {
     }
 }
 
-const sprite_t *oam_getSprite(uint8_t x) {
-    for(int i = 0; i<8; i++) {
+uint8_t oam_getSpriteIdxOnScanline(uint8_t x) {
+    for(uint8_t i = 0; i<8; i++) {
         const sprite_t *sprite = &oam.sprite[local_sprites[i]];
         if( (x >= sprite->x) && (x < (sprite->x+8))) {
             // TODO: take sprite with first opaque pixel
-            return sprite;
+            return local_sprites[i];
         }
     }
-    return NULL;
+    return 0xff;
 }
 
 const uint16_t get_spriteTileAddr(uint8_t idx) {
@@ -343,10 +343,12 @@ void ppu_tick(void) {
             }
             int sprite_pixel = -1;
             const sprite_t *sprite = NULL;
+            uint8_t sprite_idx = 0xff;
             if (SHOW_SPRITES_ENABLED) {
-                if( SPRITES_LEFT_ENABLED || x >= 8) {
-                    sprite = oam_getSprite(x);
-                    if (sprite) {
+                if (SPRITES_LEFT_ENABLED || x >= 8) {
+                    sprite_idx = oam_getSpriteIdxOnScanline(x);
+                    if (sprite_idx < 0xff) {
+                        sprite = &oam.sprite[sprite_idx];
                         uint16_t sprite_tile_addr = get_spriteTileAddr(sprite->index);
                         sprite_pixel = getSpriteTilePixel(sprite_tile_addr, x - sprite->x, y - sprite->y, sprite->attr);
                     }
