@@ -182,8 +182,8 @@ int main(int argc, char *argv[]) {
     atexit(onExit);
     // cartridge_loadROM("rom/Tetris.nes");
     cartridge_loadROM("rom/DonkeyKong.nes");
-    // cartridge_loadROM("rom/nestest.nes");
     // cartridge_loadROM("rom/LodeRunnerUSA.nes");
+    // cartridge_loadROM("rom/nestest.nes");
     // cartridge_loadROM("rom/Ice Climber (USA, Europe).nes");
     // cartridge_loadROM("rom/Pac-Man (USA).nes");
     // cartridge_loadROM("rom/Balloon Fight (USA).nes");

@@ -298,7 +298,7 @@ void sprite0hit_handler(int x, int y, uint8_t bgcol, uint8_t sprcol) {
     }
 }
 
-#define ATTR_TABLE_BASE(ntaddr) ((ntaddr & ~0x2c00) + 0x3c0)
+#define ATTR_TABLE_BASE(ntaddr) ((ntaddr & 0x2c00) + 0x3c0)
 
 void blitBGLine(uint8_t y, uint8_t *line) {
     int line_x = 0;
@@ -339,14 +339,39 @@ void blitBGLine(uint8_t y, uint8_t *line) {
     }
 }
 
-void blitSpriteLine(uint8_t y, uint8_t *line) {
+int blitSpriteLine(uint8_t y, uint8_t *line) {
+    const uint16_t ptbase = SPRITE_PATTERN_TABLE_SEL ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
+    int s0_hit_pos = -1;
     oam_collectSprites(y);
+    for (int t = 0; t < 8; t++) {
+        uint8_t sprite_idx = local_sprites[t];
+        if (sprite_idx == 0xff) {
+            continue;
+        }
+        const sprite_t *sprite = &oam.sprite[sprite_idx];
+        if (y >= sprite->y && y < sprite->y + 8) {
+            int ty = y - sprite->y;
+            if (sprite->attr & 0x80) {
+                 ty = 7 - ty; // flip y
+            }
+            uint16_t addr = ptbase + sprite->index * 16 + ty;
+            uint8_t chr1 = cartridge_ppu_read(addr);
+            uint8_t chr2 = cartridge_ppu_read(addr + 8);
+            for (int x = 0; x < 8; x++) {
+                int bitidx = (sprite->attr & 0x40) ? x : (7 - x); // flip x
+                line[sprite->x + x] = ((chr1 >> bitidx) & 1) | (((chr2 >> bitidx) & 1) << 1) | ((sprite->attr & 2) << 2);
+            }
+            if (local_sprites[t] == 0) {
+                // TODO sprite-0-hit handling
+            }
+        }
+    }
+    return s0_hit_pos;
 }
 
 
 void ppu_tick(void) {
-    static uint8_t bgline[FRAME_W];
-    static uint8_t spriteline[FRAME_W];
+    static uint8_t scanline[FRAME_W];
 
     uint32_t frame_pixel_idx = tick % TICKS_PER_FRAME;
     uint32_t y = frame_pixel_idx / TOTAL_FRAME_W;
@@ -365,8 +390,11 @@ void ppu_tick(void) {
             interrupt = false;
         }
         if (y < FRAME_H) {
-            blitBGLine(y, bgline);
-            blitSpriteLine(y, spriteline);
+            blitBGLine(y, scanline);
+            int hit_xpos = blitSpriteLine(y, scanline);
+            if (hit_xpos > -1) {
+                // sprite0hit
+            }
         }
     } else {
         if (x == TOTAL_FRAME_W-1) {
@@ -381,7 +409,7 @@ void ppu_tick(void) {
     if (x < FRAME_W) {
         if (y < FRAME_H) {
             // Visible pixels
-            setpixel(x, y, bgline[x]);
+            setpixel(x, y, scanline[x]);
         }
     } else {
         // HBLANK
