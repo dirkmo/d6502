@@ -181,12 +181,12 @@ int main(int argc, char *argv[]) {
     draw();
     atexit(onExit);
     // cartridge_loadROM("rom/Tetris.nes");
-    cartridge_loadROM("rom/DonkeyKong.nes");
-    // cartridge_loadROM("rom/LodeRunnerUSA.nes");
     // cartridge_loadROM("rom/nestest.nes");
     // cartridge_loadROM("rom/Ice Climber (USA, Europe).nes");
     // cartridge_loadROM("rom/Pac-Man (USA).nes");
     // cartridge_loadROM("rom/Balloon Fight (USA).nes");
+    // cartridge_loadROM("rom/DonkeyKong.nes");
+    cartridge_loadROM("rom/LodeRunnerUSA.nes");
 
     d6502_t cpu;
     d6502_init(&cpu);

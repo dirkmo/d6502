@@ -323,14 +323,15 @@ void blitBGLine(uint8_t y, uint8_t *line) {
             uint16_t tile_addr = getBGTileAddr(tile_idx);
             chr1 = cartridge_ppu_read(tile_addr + (y % 8));
             chr2 = cartridge_ppu_read(tile_addr + (y % 8) + 8);
-        }
-        if (line_x % 16 == 0) {
-            if (line_x % 32 == 0) {
-                // fetch attribute
-                attr = cartridge_ppu_read(attraddr++);
+            if (x % 16 == 0) {
+                if (x % 32 == 0) {
+                    // fetch attribute
+                    attr = cartridge_ppu_read(attraddr++);
+                }
+                uint8_t attrbit_idx = (x % 32) > 15 ? 2 : 0;
+                attrbit_idx += (y % 32) > 15 ? 4 : 0;
+                attrbits = ((attr >> attrbit_idx) & 0x03) << 2;
             }
-            uint8_t bit_idx = 0;//((y & 0x10) >> 2) + ((line_x & 0x10) >> 3);
-            attrbits = ((attr >> bit_idx) & 0x03) << 2;
         }
         int bitidx = 7 - (x % 8);
         line[line_x++] = ((chr1 >> bitidx) & 1) | (((chr2 >> bitidx) & 1) << 1) | attrbits;
