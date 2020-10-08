@@ -324,16 +324,14 @@ void blitBGLine(uint8_t y, uint8_t *line) {
             chr1 = cartridge_ppu_read(tile_addr + (y % 8));
             chr2 = cartridge_ppu_read(tile_addr + (y % 8) + 8);
         }
-
         if (line_x % 16 == 0) {
             if (line_x % 32 == 0) {
                 // fetch attribute
                 attr = cartridge_ppu_read(attraddr++);
             }
-            uint8_t bit_idx = ((y & 0x10) >> 2) + ((line_x & 0x10) >> 3);
-            attrbits = ((cartridge_ppu_read(attraddr) >> bit_idx) & 0x03) << 2;
+            uint8_t bit_idx = 0;//((y & 0x10) >> 2) + ((line_x & 0x10) >> 3);
+            attrbits = ((attr >> bit_idx) & 0x03) << 2;
         }
-
         int bitidx = 7 - (x % 8);
         line[line_x++] = ((chr1 >> bitidx) & 1) | (((chr2 >> bitidx) & 1) << 1) | attrbits;
     }
@@ -359,7 +357,7 @@ int blitSpriteLine(uint8_t y, uint8_t *line) {
             uint8_t chr2 = cartridge_ppu_read(addr + 8);
             for (int x = 0; x < 8; x++) {
                 int bitidx = (sprite->attr & 0x40) ? x : (7 - x); // flip x
-                uint8_t sprcol = ((chr1 >> bitidx) & 1) | (((chr2 >> bitidx) & 1) << 1) | ((sprite->attr & 2) << 2);
+                uint8_t sprcol = 0x10 | ((chr1 >> bitidx) & 1) | (((chr2 >> bitidx) & 1) << 1) | ((sprite->attr & 3) << 2);
                 if (!(sprite->attr & 0x20) && (sprcol % 4)) {
                     line[sprite->x + x] = sprcol;
                     if ((local_sprites[t] == 0) && (s0_hit_pos < 0)) {
