@@ -33,6 +33,8 @@
 #define VBLANK_MASK 0x80
 #define SPRITE0HIT_MASK 0x40
 
+#define SCROLL_X (ppu_scroll[0])
+#define SCROLL_Y (ppu_scroll[1])
 
 typedef struct {
     uint8_t y;
@@ -49,6 +51,7 @@ static bool sprite0hit = false;
 uint8_t ppu_ctrl = 0;
 uint8_t ppu_mask = 0;
 uint8_t ppu_status = 0;
+uint8_t ppu_scroll[2] = {0, 0};
 uint16_t ppuaddr = 0;
 uint8_t ppudata = 0;
 uint8_t oam_addr = 0;
@@ -149,7 +152,7 @@ const uint16_t getBGTileAddr(uint8_t idx) {
     return base + 16 * idx;
 }
 
-uint8_t getAttribute(uint16_t nametable_baseaddr, uint8_t x, uint8_t y) {
+uint8_t getAttribute(uint16_t attrtable_baseaddr, uint8_t x, uint8_t y) {
     // 256x240, 8 Attribute bytes per line
 
     // +------------+------------+
@@ -173,7 +176,7 @@ uint8_t getAttribute(uint16_t nametable_baseaddr, uint8_t x, uint8_t y) {
 
     int byte_idx = (y/32)*8 + x/32;
     uint8_t bit_idx = ((y & 0x10) >> 2) + ((x & 0x10) >> 3);
-    uint16_t addr = nametable_baseaddr + byte_idx;
+    uint16_t addr = attrtable_baseaddr + byte_idx;
     assert( addr < sizeof(vram));
     uint8_t attr = (cartridge_ppu_read(addr) >> bit_idx) & 0x03;
     return attr << 2;
@@ -196,6 +199,8 @@ void ppu_write(uint8_t addr, uint8_t dat) {
             oam.raw[oam_addr++] = dat;
             break;
         case 5: // PPUSCROLL, VRAM Address Register #1 (W2)
+            ppu_scroll[0] = ppu_scroll[1];
+            ppu_scroll[1] = dat;
             break;
         case 6: // PPUADDR, VRAM Address Register #2 (W2)
             ppuaddr = ((ppuaddr & 0x3f) << 8) | dat;
@@ -258,11 +263,11 @@ uint8_t getNameTableEntry(uint16_t nametable_baseaddr, int x, int y) {
     return cartridge_ppu_read(addr);
 }
 
-static uint8_t pixel_prio(const sprite_t *sprite, uint8_t sprcol, uint8_t bgcol) {
+static uint8_t pixel_prio(uint8_t sprite_idx, uint8_t sprcol, uint8_t bgcol) {
     // attr bit 5: Sprite priority (0: in front of background; 1: behind background)
     // col % 4 == 0 --> transparent pixel (backdrop color)
-    if (sprite) {
-        if (((sprite->attr & 0x20) == 0) && ((sprcol % 4) != 0)) {
+    if (sprite_idx < 64) {
+        if (((oam.sprite[sprite_idx].attr & 0x20) == 0) && ((sprcol % 4) != 0)) {
             return sprcol;
         }
     }
@@ -293,9 +298,55 @@ void sprite0hit_handler(int x, int y, uint8_t bgcol, uint8_t sprcol) {
     }
 }
 
+#define ATTR_TABLE_BASE(ntaddr) ((ntaddr & ~0x2c00) + 0x3c0)
+
+void blitBGLine(uint8_t y, uint8_t *line) {
+    int line_x = 0;
+    uint16_t ntoffsy = (y / 8) * 32 + SCROLL_X / 8;
+    uint16_t ntaddr = getNameTableAddr() + ntoffsy;
+    uint16_t attroffsy = (y / 32) * 8 + SCROLL_X / 32;
+    uint16_t attraddr = ATTR_TABLE_BASE(ntaddr) + attroffsy;
+    uint8_t attr = 0;
+    uint8_t attrbits = 0;
+    uint8_t chr1 = 0;
+    uint8_t chr2 = 0;
+    for ( int x = SCROLL_X; x < SCROLL_X + FRAME_W; x++) {
+        if (x == FRAME_W) {
+            // NT switch for horiz scroll --> toggle bit 10
+            ntaddr &= 0x2c00;
+            ntaddr = (ntaddr & 0x400) ? (ntaddr & ~0x400) : (ntaddr | 0x400) + ntoffsy;
+            attraddr = ATTR_TABLE_BASE(ntaddr) + attroffsy;
+        }
+        if (x % 8 == 0) {
+            // fetch tile
+            uint8_t tile_idx = cartridge_ppu_read(ntaddr++);
+            uint16_t tile_addr = getBGTileAddr(tile_idx);
+            chr1 = cartridge_ppu_read(tile_addr + (y % 8));
+            chr2 = cartridge_ppu_read(tile_addr + (y % 8) + 8);
+        }
+
+        if (line_x % 16 == 0) {
+            if (line_x % 32 == 0) {
+                // fetch attribute
+                attr = cartridge_ppu_read(attraddr++);
+            }
+            uint8_t bit_idx = ((y & 0x10) >> 2) + ((line_x & 0x10) >> 3);
+            attrbits = ((cartridge_ppu_read(attraddr) >> bit_idx) & 0x03) << 2;
+        }
+
+        int bitidx = 7 - (x % 8);
+        line[line_x++] = ((chr1 >> bitidx) & 1) | (((chr2 >> bitidx) & 1) << 1) | attrbits;
+    }
+}
+
+void blitSpriteLine(uint8_t y, uint8_t *line) {
+    oam_collectSprites(y);
+}
+
+
 void ppu_tick(void) {
-    static uint16_t bgtile_addr;
-    static uint8_t attr = 0;
+    static uint8_t bgline[FRAME_W];
+    static uint8_t spriteline[FRAME_W];
 
     uint32_t frame_pixel_idx = tick % TICKS_PER_FRAME;
     uint32_t y = frame_pixel_idx / TOTAL_FRAME_W;
@@ -306,13 +357,16 @@ void ppu_tick(void) {
 
     if (x == 0) {
         // beginning of line
-        oam_collectSprites(y);
-        if ( y == 0 ) {
+        if (y == 0) {
             // beginning of frame
             ppu_status &= ~VBLANK_MASK;
             ppu_status &= ~SPRITE0HIT_MASK;
             sprite0hit = false;
             interrupt = false;
+        }
+        if (y < FRAME_H) {
+            blitBGLine(y, bgline);
+            blitSpriteLine(y, spriteline);
         }
     } else {
         if (x == TOTAL_FRAME_W-1) {
@@ -327,38 +381,7 @@ void ppu_tick(void) {
     if (x < FRAME_W) {
         if (y < FRAME_H) {
             // Visible pixels
-            uint8_t bgpixel = 0;
-            if (SHOW_BG_ENABLED) {
-                if( BG_LEFT_ENABLED || x >= 8) {
-                    if (relx == 0) {
-                        // upperleft of tile
-                        uint8_t tile_idx = getNameTableEntry(getNameTableAddr(), x, y);
-                        bgtile_addr = getBGTileAddr(tile_idx);
-                        if (x % 16 == 0) {
-                            attr = getAttribute( getAttributeTableAddr(), x, y);
-                        }
-                    }
-                    bgpixel = SHOW_BG_ENABLED ? (attr | getBGTilePixel(bgtile_addr, 8*rely+relx)) : 0;
-                }
-            }
-            int sprite_pixel = -1;
-            const sprite_t *sprite = NULL;
-            uint8_t sprite_idx = 0xff;
-            if (SHOW_SPRITES_ENABLED) {
-                if (SPRITES_LEFT_ENABLED || x >= 8) {
-                    sprite_idx = oam_getSpriteIdxOnScanline(x);
-                    if (sprite_idx < 0xff) {
-                        sprite = &oam.sprite[sprite_idx];
-                        uint16_t sprite_tile_addr = get_spriteTileAddr(sprite->index);
-                        sprite_pixel = getSpriteTilePixel(sprite_tile_addr, x - sprite->x, y - sprite->y, sprite->attr);
-                    }
-                }
-            }
-            uint8_t pixel = pixel_prio(sprite, sprite_pixel, bgpixel);
-            setpixel(x, y, pixel);
-            // if (sprite_index == 0) {
-            //     sprite0hit_handler(x, y, bgpixel, sprite_pixel);
-            // }
+            setpixel(x, y, bgline[x]);
         }
     } else {
         // HBLANK
