@@ -359,7 +359,10 @@ int blitSpriteLine(uint8_t y, uint8_t *line) {
             uint8_t chr2 = cartridge_ppu_read(addr + 8);
             for (int x = 0; x < 8; x++) {
                 int bitidx = (sprite->attr & 0x40) ? x : (7 - x); // flip x
-                line[sprite->x + x] = ((chr1 >> bitidx) & 1) | (((chr2 >> bitidx) & 1) << 1) | ((sprite->attr & 2) << 2);
+                uint8_t sprcol = ((chr1 >> bitidx) & 1) | (((chr2 >> bitidx) & 1) << 1) | ((sprite->attr & 2) << 2);
+                if (!(sprite->attr & 0x20) && (sprcol % 4)) {
+                    line[sprite->x + x] = sprcol;
+                }
             }
             if (local_sprites[t] == 0) {
                 // TODO sprite-0-hit handling
