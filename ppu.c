@@ -362,10 +362,10 @@ int blitSpriteLine(uint8_t y, uint8_t *line) {
                 uint8_t sprcol = ((chr1 >> bitidx) & 1) | (((chr2 >> bitidx) & 1) << 1) | ((sprite->attr & 2) << 2);
                 if (!(sprite->attr & 0x20) && (sprcol % 4)) {
                     line[sprite->x + x] = sprcol;
+                    if ((local_sprites[t] == 0) && (s0_hit_pos < 0)) {
+                        s0_hit_pos = sprite->x + x;
+                    }
                 }
-            }
-            if (local_sprites[t] == 0) {
-                // TODO sprite-0-hit handling
             }
         }
     }
