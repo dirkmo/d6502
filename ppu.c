@@ -302,10 +302,8 @@ void sprite0hit_handler(int x, int y, uint8_t bgcol, uint8_t sprcol) {
 
 void blitBGLine(uint8_t y, uint8_t *line) {
     int line_x = 0;
-    uint16_t ntoffsy = (y / 8) * 32 + SCROLL_X / 8;
-    uint16_t ntaddr = getNameTableAddr() + ntoffsy;
-    uint16_t attroffsy = (y / 32) * 8 + SCROLL_X / 32;
-    uint16_t attraddr = ATTR_TABLE_BASE(ntaddr) + attroffsy;
+    uint16_t ntaddr   = getNameTableAddr()      + (y / 8) * 32 + SCROLL_X / 8;
+    uint16_t attraddr = ATTR_TABLE_BASE(ntaddr) + (y / 32) * 8 + SCROLL_X / 32;
     uint8_t attr = 0;
     uint8_t attrbits = 0;
     uint8_t chr1 = 0;
@@ -313,9 +311,8 @@ void blitBGLine(uint8_t y, uint8_t *line) {
     for ( int x = SCROLL_X; x < SCROLL_X + FRAME_W; x++) {
         if (x == FRAME_W) {
             // NT switch for horiz scroll --> toggle bit 10
-            ntaddr &= 0x2c00;
-            ntaddr = (ntaddr & 0x400) ? (ntaddr & ~0x400) : (ntaddr | 0x400) + ntoffsy;
-            attraddr = ATTR_TABLE_BASE(ntaddr) + attroffsy;
+            ntaddr = (ntaddr & 0x2c00) ^ 0x400;
+            attraddr = ATTR_TABLE_BASE(ntaddr);
         }
         if (x % 8 == 0) {
             // fetch tile
@@ -378,9 +375,6 @@ void ppu_tick(void) {
     uint32_t frame_pixel_idx = tick % TICKS_PER_FRAME;
     uint32_t y = frame_pixel_idx / TOTAL_FRAME_W;
     uint32_t x = frame_pixel_idx % TOTAL_FRAME_W;
-
-    uint8_t relx = x % 8;
-    uint8_t rely = y % 8;
 
     if (x == 0) {
         // beginning of line
