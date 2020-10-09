@@ -187,6 +187,7 @@ int main(int argc, char *argv[]) {
     // cartridge_loadROM("rom/Balloon Fight (USA).nes");
     // cartridge_loadROM("rom/DonkeyKong.nes");
     cartridge_loadROM("rom/LodeRunnerUSA.nes");
+    // cartridge_loadROM("rom/zelda.nes");
 
     d6502_t cpu;
     d6502_init(&cpu);

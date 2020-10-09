@@ -59,18 +59,20 @@ uint8_t oam_addr = 0;
 
 uint8_t vram[0x4000];
 
-union {
-    uint8_t raw[0x100];
-    sprite_t sprite[0x100/4];
-} oam;
+#define OAM_SPRITE_Y(a) (oam[a])
+#define OAM_SPRITE_INDEX(a) (oam[a+1])
+#define OAM_SPRITE_ATTR(a) (oam[a+2])
+#define OAM_SPRITE_X(a) (oam[a+3])
+
+uint8_t oam[0x100];
 
 uint8_t local_sprites[8];
 
 void oam_collectSprites(uint8_t y) {
-    int s = 0; // oam_addr is used as sprite 0 (index into oam.raw!)
-    #warning !!!
-    for(int i = 0; i < 64 && s < 8; i++) {
-        if ((y >= oam.sprite[i].y) && (y < oam.sprite[i].y+8)) {
+    int s = 0;
+    // oam_addr is used as sprite 0 (index into oam.raw!)
+    for(int i = oam_addr; i < 0x100 && s < 8; i+=4) {
+        if ((y >= OAM_SPRITE_Y(i)) && (y < OAM_SPRITE_Y(i)+8)) {
             local_sprites[s++] = i;
         }
     }
@@ -115,8 +117,8 @@ void ppu_write(uint8_t addr, uint8_t dat) {
             oam_addr = dat;
             break;
         case 4: // OAMDATA, SPR-RAM I/O Register
-            printf("OAMDATA %02X %02X\n",oam_addr, dat);
-            oam.raw[oam_addr++] = dat;
+            // printf("OAMDATA %02X %02X\n",oam_addr, dat);
+            oam[oam_addr++] = dat;
             break;
         case 5: // PPUSCROLL, VRAM Address Register #1 (W2)
             ppu_scroll[0] = ppu_scroll[1];
@@ -124,6 +126,7 @@ void ppu_write(uint8_t addr, uint8_t dat) {
             break;
         case 6: // PPUADDR, VRAM Address Register #2 (W2)
             ppuaddr = ((ppuaddr & 0x3f) << 8) | dat;
+            // printf("PPUADDR %02X --> %04X\n", dat, ppuaddr);
             break;
         case 7: // PPUDATA, VRAM I/O Register
             cartridge_ppu_write(ppuaddr, dat);
@@ -149,7 +152,7 @@ uint8_t ppu_read(uint8_t addr) {
         case 3: // OAMADDR, SPR-RAM Address Register
             break;
         case 4: // OAMDATA, SPR-RAM I/O Register
-            val = oam.raw[oam_addr];
+            val = oam[oam_addr];
             break;
         case 5: // PPUSCROLL, VRAM Address Register #1 (W2)
             break;
@@ -169,17 +172,6 @@ uint8_t ppu_read(uint8_t addr) {
 uint16_t getNameTableAddr(void) {
     uint16_t addr = NAME_TABLE_0 | ((ppu_ctrl & 0x3) << 10);
     return addr;
-}
-
-static uint8_t pixel_prio(uint8_t sprite_idx, uint8_t sprcol, uint8_t bgcol) {
-    // attr bit 5: Sprite priority (0: in front of background; 1: behind background)
-    // col % 4 == 0 --> transparent pixel (backdrop color)
-    if (sprite_idx < 64) {
-        if (((oam.sprite[sprite_idx].attr & 0x20) == 0) && ((sprcol % 4) != 0)) {
-            return sprcol;
-        }
-    }
-    return bgcol;
 }
 
 bool ppu_interrupt(void) {
@@ -244,7 +236,7 @@ int blitSpriteLine(uint8_t y, uint8_t *line) {
         if (sprite_idx == 0xff) {
             continue;
         }
-        const sprite_t *sprite = &oam.sprite[sprite_idx];
+        const sprite_t *sprite = &oam[sprite_idx];
         if (y >= sprite->y && y < sprite->y + 8) {
             int ty = y - sprite->y;
             if (sprite->attr & 0x80) {

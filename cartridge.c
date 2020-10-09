@@ -85,13 +85,11 @@ static uint8_t mapper0_cpu_read(uint16_t addr) {
 }
 
 uint8_t cartridge_ppu_read(uint16_t addr) {
-    assert(addr < 0x4000);
-    return cartridge.mapper_ppu_read(addr);
+    return cartridge.mapper_ppu_read(addr % 0x4000);
 }
 
 void cartridge_ppu_write(uint16_t addr, uint8_t dat) {
-    assert(addr < 0x4000);
-    cartridge.mapper_ppu_write(addr, dat);
+    cartridge.mapper_ppu_write(addr % 0x4000, dat);
 }
 
 uint8_t cartridge_cpu_read(uint16_t addr) {
