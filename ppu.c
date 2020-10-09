@@ -4,6 +4,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 #include "nescolors.h"
 #include "cartridge.h"
 
@@ -66,7 +67,8 @@ union {
 uint8_t local_sprites[8];
 
 void oam_collectSprites(uint8_t y) {
-    int s = 0;
+    int s = 0; // oam_addr is used as sprite 0 (index into oam.raw!)
+    #warning !!!
     for(int i = 0; i < 64 && s < 8; i++) {
         if ((y >= oam.sprite[i].y) && (y < oam.sprite[i].y+8)) {
             local_sprites[s++] = i;
@@ -75,49 +77,6 @@ void oam_collectSprites(uint8_t y) {
     for (; s < 8; s++) {
         local_sprites[s] = 0xff;
     }
-}
-
-uint8_t oam_getSpriteIdxOnScanline(uint8_t x) {
-    for(uint8_t i = 0; i<8; i++) {
-        const sprite_t *sprite = &oam.sprite[local_sprites[i]];
-        if( (x >= sprite->x) && (x < (sprite->x+8))) {
-            // TODO: take sprite with first opaque pixel
-            return local_sprites[i];
-        }
-    }
-    return 0xff;
-}
-
-const uint16_t get_spriteTileAddr(uint8_t idx) {
-    uint16_t tableaddr;
-    if (SPRITE_SIZE_8x16) {
-        // 8x16 sprites
-        tableaddr = (idx & 1) ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
-        idx = idx & 0xFE; // bottom half of sprite follows
-        assert(1);
-    } else {
-        // 8x8 sprites
-        tableaddr = SPRITE_PATTERN_TABLE_SEL ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
-    }
-    return tableaddr + 16 * idx;
-}
-
-uint8_t getSpriteTilePixel(uint16_t tile_addr, uint8_t x, uint8_t y, uint8_t attr) {
-    if ((attr & 0x40)) {
-        // flip horizontally
-        x = 7 - x;
-    }
-    if ((attr & 0x80)) {
-        // flip vertically
-        y = 7 - y;
-    }
-    int bitidx = x;
-    int byteidx = y;
-    uint8_t chr1 = cartridge_ppu_read(tile_addr + byteidx);
-    uint8_t chr2 = cartridge_ppu_read(tile_addr + byteidx + 8);
-    uint8_t b1 = (chr1 >> (7-bitidx)) & 1;
-    uint8_t b2 = (chr2 >> (7-bitidx)) & 1;
-    return b1 | (b2 << 1);
 }
 
 const uint32_t *ppu_getFrameBuffer(void) {
@@ -137,49 +96,9 @@ void setpixel( int x, int y, uint8_t color ) {
     pixels[p] = nescolors[vram[addr]];
 }
 
-uint8_t getBGTilePixel(uint16_t addr, uint8_t idx) {
-    int bitidx = idx % 8;
-    int byteidx = (idx / 8);
-    uint8_t chr1 = cartridge_ppu_read(addr+byteidx);
-    uint8_t chr2 = cartridge_ppu_read(addr+byteidx+8);
-    uint8_t b1 = (chr1 >> (7-bitidx)) & 1;
-    uint8_t b2 = (chr2 >> (7-bitidx)) & 1;
-    return b1 | (b2 << 1);
-}
-
 const uint16_t getBGTileAddr(uint8_t idx) {
     uint16_t base = BG_PATTERN_TABLE_SEL ? PATTERN_TABLE_1 : PATTERN_TABLE_0;
     return base + 16 * idx;
-}
-
-uint8_t getAttribute(uint16_t attrtable_baseaddr, uint8_t x, uint8_t y) {
-    // 256x240, 8 Attribute bytes per line
-
-    // +------------+------------+
-    // |  Square 0  |  Square 1  |   A square is 16x16 pixels = 4 tiles
-    // |   #0  #1   |   #4  #5   |
-    // |   #2  #3   |   #6  #7   |
-    // +------------+------------+
-    // |  Square 2  |  Square 3  |
-    // |   #8  #9   |   #C  #D   |
-    // |   #A  #B   |   #E  #F   |
-    // +------------+------------+
-
-    //   Attribute Byte
-    //    (Square #)
-    //  ----------------
-    //      33221100
-    //      ||||||+--- Upper two (2) colour bits for Square 0 (Tiles #0,1,2,3); (x % 32) < 16; (y % 32) < 16; lower nibble bits 0+1
-    //      ||||+----- Upper two (2) colour bits for Square 1 (Tiles #4,5,6,7); (x % 32) > 15; (y % 32) < 16; lower nibble bits 2+3
-    //      ||+------- Upper two (2) colour bits for Square 2 (Tiles #8,9,A,B); (x % 32) < 16; (y % 32) > 15; upper nibble bits 0+1
-    //      +--------- Upper two (2) colour bits for Square 3 (Tiles #C,D,E,F); (x % 32) > 15; (y % 32) > 15; upper nibble bits 2+3
-
-    int byte_idx = (y/32)*8 + x/32;
-    uint8_t bit_idx = ((y & 0x10) >> 2) + ((x & 0x10) >> 3);
-    uint16_t addr = attrtable_baseaddr + byte_idx;
-    assert( addr < sizeof(vram));
-    uint8_t attr = (cartridge_ppu_read(addr) >> bit_idx) & 0x03;
-    return attr << 2;
 }
 
 void ppu_write(uint8_t addr, uint8_t dat) {
@@ -196,6 +115,7 @@ void ppu_write(uint8_t addr, uint8_t dat) {
             oam_addr = dat;
             break;
         case 4: // OAMDATA, SPR-RAM I/O Register
+            printf("OAMDATA %02X %02X\n",oam_addr, dat);
             oam.raw[oam_addr++] = dat;
             break;
         case 5: // PPUSCROLL, VRAM Address Register #1 (W2)
@@ -251,18 +171,6 @@ uint16_t getNameTableAddr(void) {
     return addr;
 }
 
-uint16_t getAttributeTableAddr(void) {
-    return getNameTableAddr() + 0x3c0;
-}
-
-uint8_t getNameTableEntry(uint16_t nametable_baseaddr, int x, int y) {
-    x = x / 8;
-    y = y / 8;
-    uint16_t idx = y * 32 + x;
-    uint16_t addr = nametable_baseaddr + idx;
-    return cartridge_ppu_read(addr);
-}
-
 static uint8_t pixel_prio(uint8_t sprite_idx, uint8_t sprcol, uint8_t bgcol) {
     // attr bit 5: Sprite priority (0: in front of background; 1: behind background)
     // col % 4 == 0 --> transparent pixel (backdrop color)
@@ -275,7 +183,7 @@ static uint8_t pixel_prio(uint8_t sprite_idx, uint8_t sprcol, uint8_t bgcol) {
 }
 
 bool ppu_interrupt(void) {
-    return (ppu_ctrl & 0x80) && interrupt;
+    return (ppu_ctrl & VBLANK_MASK) && interrupt;
 }
 
 bool ppu_should_draw(void) {
@@ -285,17 +193,6 @@ bool ppu_should_draw(void) {
         return true;
     }
     return false;
-}
-
-void sprite0hit_handler(int x, int y, uint8_t bgcol, uint8_t sprcol) {
-    if (!sprite0hit) {
-        if (SHOW_BG_ENABLED && SHOW_SPRITES_ENABLED) {
-            if (x > 7 || SPRITES_LEFT_ENABLED || BG_LEFT_ENABLED) {
-                ppu_status |= SPRITE0HIT_MASK;
-                sprite0hit = true;
-            }
-        }
-    }
 }
 
 #define ATTR_TABLE_BASE(ntaddr) ((ntaddr & 0x2c00) + 0x3c0)
@@ -330,8 +227,11 @@ void blitBGLine(uint8_t y, uint8_t *line) {
                 attrbits = ((attr >> attrbit_idx) & 0x03) << 2;
             }
         }
-        int bitidx = 7 - (x % 8);
-        line[line_x++] = ((chr1 >> bitidx) & 1) | (((chr2 >> bitidx) & 1) << 1) | attrbits;
+        if (BG_LEFT_ENABLED || line_x > 7) {
+            int bitidx = 7 - (x % 8);
+            line[line_x] = ((chr1 >> bitidx) & 1) | (((chr2 >> bitidx) & 1) << 1) | attrbits;
+        }
+        line_x++;
     }
 }
 
@@ -357,13 +257,18 @@ int blitSpriteLine(uint8_t y, uint8_t *line) {
                 int bitidx = (sprite->attr & 0x40) ? x : (7 - x); // flip x
                 uint8_t sprcol = 0x10 | ((chr1 >> bitidx) & 1) | (((chr2 >> bitidx) & 1) << 1) | ((sprite->attr & 3) << 2);
                 if (!(sprite->attr & 0x20) && (sprcol % 4)) {
-                    line[sprite->x + x] = sprcol;
-                    if ((local_sprites[t] == 0) && (s0_hit_pos < 0)) {
-                        s0_hit_pos = sprite->x + x;
+                    if (sprite->x + x > 7 || SPRITES_LEFT_ENABLED) {
+                        line[sprite->x + x] = sprcol;
+                        if ((local_sprites[t] == oam_addr) && (s0_hit_pos < 0)) {
+                            s0_hit_pos = sprite->x + x;
+                        }
                     }
                 }
             }
         }
+    }
+    if (s0_hit_pos == 255) {
+        s0_hit_pos = -1;
     }
     return s0_hit_pos;
 }
@@ -375,26 +280,29 @@ void ppu_tick(void) {
     uint32_t frame_pixel_idx = tick % TICKS_PER_FRAME;
     uint32_t y = frame_pixel_idx / TOTAL_FRAME_W;
     uint32_t x = frame_pixel_idx % TOTAL_FRAME_W;
+    int hit_xpos = -1;
 
     if (x == 0) {
         // beginning of line
         if (y == 0) {
             // beginning of frame
+            memset(scanline, 0, sizeof(scanline));
             ppu_status &= ~VBLANK_MASK;
             ppu_status &= ~SPRITE0HIT_MASK;
             sprite0hit = false;
             interrupt = false;
         }
         if (y < FRAME_H) {
-            blitBGLine(y, scanline);
-            int hit_xpos = blitSpriteLine(y, scanline);
-            if (hit_xpos > -1) {
-                // sprite0hit
+            if (SHOW_BG_ENABLED) {
+                blitBGLine(y, scanline);
+            }
+            if (SHOW_SPRITES_ENABLED) {
+                hit_xpos = blitSpriteLine(y, scanline);
             }
         }
     } else {
-        if (x == TOTAL_FRAME_W-1) {
-            if (y == FRAME_H-1) {
+        if (x == 1) {
+            if (y == FRAME_H+1) {
                 // last visible line done
                 ppu_status |= VBLANK_MASK;
                 interrupt = true;
@@ -405,13 +313,25 @@ void ppu_tick(void) {
     if (x < FRAME_W) {
         if (y < FRAME_H) {
             // Visible pixels
+            if (hit_xpos > -1) {
+                ppu_status |= SPRITE0HIT_MASK;
+            }
             setpixel(x, y, scanline[x]);
         }
     } else {
         // HBLANK
         if(y < FRAME_H) {
-            oam_addr = 0;
+            if (x > 255) {
+                if (SHOW_SPRITES_ENABLED) {
+                    oam_addr = 0;
+                }
+            }
         }
     }
     tick++;
+
+
+    if (SPRITE_SIZE_8x16) {
+        printf("8x16 sprites not supported\n");
+    }
 }
