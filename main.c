@@ -33,6 +33,10 @@ int EMULATION_END = 0;
 uint32_t run_count = 0;
 uint16_t breakpoint = 0;
 
+uint32_t frame = 0;
+uint32_t stop_frame = 0;
+int frame_step = 0;
+
 int init_sdl(void) {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         return -1;
@@ -202,9 +206,11 @@ int main(int argc, char *argv[]) {
     char logstr[128];
 #endif
     int instruction_counter = 1;
+#if 0
     char asmcode[32];
     char raw[16];
     char buf[256];
+#endif
     SDL_Event e;
     int nmi_count = 0;
     while( EMULATION_END == 0) {
@@ -242,6 +248,16 @@ int main(int argc, char *argv[]) {
                     case SDLK_ESCAPE:
                         EMULATION_END = 1;
                         break;
+                    case SDLK_SPACE:
+                        frame_step ^= (e.type == SDL_KEYDOWN);
+                        printf("frame_step: %d\n", frame_step);
+                        break;
+                    case SDLK_f:
+                        if (e.type == SDL_KEYDOWN) {
+                            printf("next frame\n");
+                            stop_frame = frame + 1;
+                        }
+                        break;
                     default: ;
                 }
             }
@@ -256,9 +272,9 @@ int main(int argc, char *argv[]) {
             }
         } // while (SDL_PollEvent(&e))
 
+#if 0
         d6502_disassemble(&cpu, cpu.pc, asmcode);
 
-#if 0
         get_raw_instruction(&cpu, raw);
         print_regs(&cpu);
         do {
@@ -286,33 +302,39 @@ int main(int argc, char *argv[]) {
         fflush(log);
 #endif
 #endif
-        int clock = 0;
-        while(1) {
-            // ppu runs 3x faster than the cpu
-            ppu_tick();
-            if( ppu_should_draw() ) {
-                draw();
-            }
-            if (dma.count < 0) {
-                if((clock%3) == 0) {
-                    // execute instruction
-                    if( d6502_tick(&cpu) == 0 ) {
-                        break;
+
+        if (stop_frame != frame || frame_step == 0 ) {
+
+            int clock = 0;
+            while(1) {
+                // ppu runs 3x faster than the cpu
+                ppu_tick();
+                if (dma.count < 0) {
+                    if((clock%3) == 0) {
+                        // execute instruction
+                        if( d6502_tick(&cpu) == 0 ) {
+                            break;
+                        }
                     }
+                } else {
+                    dma_handler();
                 }
+                clock++;
+            }
+            instruction_counter++; // instruction counter
+            if (ppu_interrupt()) {
+                if(nmi_count == 0) {
+                    d6502_nmi(&cpu);
+                }
+                nmi_count++;
             } else {
-                dma_handler();
+                nmi_count = 0;
             }
-            clock++;
         }
-        instruction_counter++; // instruction counter
-        if (ppu_interrupt()) {
-            if(nmi_count == 0) {
-                d6502_nmi(&cpu);
-            }
-            nmi_count++;
-        } else {
-            nmi_count = 0;
+
+        if( ppu_should_draw() ) {
+            draw();
+            frame++;
         }
     }
 #ifdef FILELOG

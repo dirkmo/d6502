@@ -170,7 +170,13 @@ uint8_t ppu_read(uint8_t addr) {
 }
 
 uint16_t getNameTableAddr(void) {
-    uint16_t addr = NAME_TABLE_0 | ((ppu_ctrl & 0x3) << 10);
+    uint16_t addr; // = NAME_TABLE_0 | ((ppu_ctrl & 0x3) << 10);
+    switch(ppu_ctrl & 0x03) {
+        case 0: addr = NAME_TABLE_0; break;
+        case 1: addr = NAME_TABLE_0 | 0x400; break;
+        case 2: addr = NAME_TABLE_0 | 0x800; break;
+        case 3: addr = NAME_TABLE_0 | 0xC00; break;
+    }
     return addr;
 }
 
@@ -188,42 +194,41 @@ bool ppu_should_draw(void) {
 }
 
 #define ATTR_TABLE_BASE(ntaddr) ((ntaddr & 0x2c00) + 0x3c0)
+#define PATTERN_TABLE_BASE() (BG_PATTERN_TABLE_SEL ? PATTERN_TABLE_1 : PATTERN_TABLE_0)
 
 void blitBGLine(uint8_t y, uint8_t *line) {
-    int line_x = 0;
-    uint16_t ntaddr   = getNameTableAddr()      + (y / 8) * 32 + SCROLL_X / 8;
+    uint16_t ptbase   = PATTERN_TABLE_BASE();
+    uint32_t ntaddr   =      getNameTableAddr() + (y / 8) * 32 + SCROLL_X / 8;
     uint16_t attraddr = ATTR_TABLE_BASE(ntaddr) + (y / 32) * 8 + SCROLL_X / 32;
     uint8_t attr = 0;
     uint8_t attrbits = 0;
     uint8_t chr1 = 0;
     uint8_t chr2 = 0;
-    for ( int x = SCROLL_X; x < SCROLL_X + FRAME_W; x++) {
+    int line_x = 0;
+    for (int x = SCROLL_X; x < SCROLL_X + FRAME_W; x++) {
         if (x == FRAME_W) {
             // NT switch for horiz scroll --> toggle bit 10
-            ntaddr = (ntaddr & 0x2c00) ^ 0x400;
-            attraddr = ATTR_TABLE_BASE(ntaddr);
+            ntaddr = ((ntaddr & 0x2c00) ^ 0x400) + (y / 8) * 32;
+            attraddr = ATTR_TABLE_BASE(ntaddr) + (y / 32) * 8;
         }
-        if (x % 8 == 0) {
+        if (x == SCROLL_X || x % 8 == 0) {
             // fetch tile
             uint8_t tile_idx = cartridge_ppu_read(ntaddr++);
-            uint16_t tile_addr = getBGTileAddr(tile_idx);
+            uint16_t tile_addr = ptbase + 16 * tile_idx;
             chr1 = cartridge_ppu_read(tile_addr + (y % 8));
             chr2 = cartridge_ppu_read(tile_addr + (y % 8) + 8);
-            if (x % 16 == 0) {
-                if (x % 32 == 0) {
+            if (x % 16 == 0 || x == SCROLL_X) {
+                if (x % 32 == 0 || x == SCROLL_X) {
                     // fetch attribute
                     attr = cartridge_ppu_read(attraddr++);
                 }
-                uint8_t attrbit_idx = (x % 32) > 15 ? 2 : 0;
-                attrbit_idx += (y % 32) > 15 ? 4 : 0;
+                uint8_t attrbit_idx = ((x % 32) > 15) ? 2 : 0;
+                attrbit_idx += ((y % 32) > 15) ? 4 : 0;
                 attrbits = ((attr >> attrbit_idx) & 0x03) << 2;
             }
         }
-        if (BG_LEFT_ENABLED || line_x > 7) {
-            int bitidx = 7 - (x % 8);
-            line[line_x] = ((chr1 >> bitidx) & 1) | (((chr2 >> bitidx) & 1) << 1) | attrbits;
-        }
-        line_x++;
+        int bitidx = 7 - (x % 8);
+        line[line_x++] = ((chr1 >> bitidx) & 1) | (((chr2 >> bitidx) & 1) << 1)  | attrbits;
     }
 }
 
@@ -236,7 +241,7 @@ int blitSpriteLine(uint8_t y, uint8_t *line) {
         if (sprite_idx == 0xff) {
             continue;
         }
-        const sprite_t *sprite = &oam[sprite_idx];
+        const sprite_t *sprite = (sprite_t*)&oam[sprite_idx];
         if (y >= sprite->y && y < sprite->y + 8) {
             int ty = y - sprite->y;
             if (sprite->attr & 0x80) {
@@ -305,7 +310,7 @@ void ppu_tick(void) {
     if (x < FRAME_W) {
         if (y < FRAME_H) {
             // Visible pixels
-            if (hit_xpos > -1) {
+            if (hit_xpos == x) {
                 ppu_status |= SPRITE0HIT_MASK;
             }
             setpixel(x, y, scanline[x]);
@@ -320,8 +325,8 @@ void ppu_tick(void) {
             }
         }
     }
-    tick++;
 
+    tick++;
 
     if (SPRITE_SIZE_8x16) {
         printf("8x16 sprites not supported\n");
