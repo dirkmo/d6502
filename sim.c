@@ -131,7 +131,7 @@ void write16(uint16_t addr, uint16_t dat) {
 }
 
 int main(int argc, char *argv[]) {
-    if (!load(0x1000, "test.bin")) {
+    if (!load(0x1000, "test/test.bin")) {
         return 1;
     }
     d6502_t cpu;
