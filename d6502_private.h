@@ -1,6 +1,8 @@
 #ifndef _D6502_private_h
 #define _D6502_private_h
 
+#define PAGE_WRAP(pc, addr) (((pc) >> 8) != ((addr) >> 8))
+
 typedef enum {
     FLAG_C = 0x01, // carry flag
     FLAG_Z = 0x02, // zero flag

@@ -1,5 +1,6 @@
 #include "d6502.h"
 #include "instruction_table.h"
+#include "inesheader.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -125,29 +126,41 @@ int load(uint16_t addr, const char *fn) {
     return 1;
 }
 
+void load_nestest(const char *fn) {
+    FILE *f = fopen(fn, "r");
+    if (f == NULL) {
+        printf("ERROR: File not found.\n");
+        exit(1);
+    }
+    inesheader_t header;
+    fread(&header, 1, sizeof(header), f);
+    fread(&memory[0xc000], header.nPRGROM16k, 16*1024, f);
+    fclose(f);
+}
+
 void write16(uint16_t addr, uint16_t dat) {
     memory[addr] = dat;
     memory[addr+1] = dat >> 8;
 }
 
 int main(int argc, char *argv[]) {
-    if (!load(0x1000, "test/test.bin")) {
-        return 1;
-    }
+    // if (!load(0x1000, "test/test.bin")) {
+    //     return 1;
+    // }
+    load_nestest("test/nestest.nes");
     d6502_t cpu;
     d6502_init(&cpu);
     cpu.read = readbus;
     cpu.write = writebus;
     
-    write16(RESET_ADDR, 0x1000);
-    write16(NMI_ADDR, 0x100c);
-    write16(INT_ADDR, 0x100e);
+    write16(RESET_ADDR, 0xc000);
     
     d6502_reset(&cpu);
 
     FILE *log = fopen("log.txt", "w");
 
     int instruction_counter = 1;
+    int cyc = 7;
     char asmcode[32];
     char raw[16];
     char logstr[128];
@@ -175,7 +188,7 @@ int main(int argc, char *argv[]) {
         while( p < 48 ) {
             logstr[p++] = ' ';
         }
-        sprintf(logstr+p, "A:%02X X:%02X Y:%02X P:%02X SP:%02X\n", cpu.a, cpu.x, cpu.y, cpu.st, cpu.sp);
+        sprintf(logstr+p, "A:%02X X:%02X Y:%02X P:%02X SP:%02X PPU:        CYC:%d\n", cpu.a, cpu.x, cpu.y, cpu.st, cpu.sp, cyc);
         fwrite(logstr, strlen(logstr), 1, log);
         fflush(log);
 
@@ -190,6 +203,7 @@ int main(int argc, char *argv[]) {
 
         // execute instruction
         while( d6502_tick(&cpu) > 0 ) {
+            cyc++;
         }
 
         instruction_counter++; // instruction counter

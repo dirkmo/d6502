@@ -33,8 +33,10 @@ static uint16_t pull16(d6502_t *cpu) {
 
 static void branch_on_condition(d6502_t *cpu, bool condition) {
     if (condition) {
-        if( (cpu->pc >> 8) != (cpu->addr >> 8)) {
-            cpu->extra_clocks = 1;
+        cpu->extra_clocks++;
+        const uint16_t pc = cpu->pc + cpu->instruction->len;
+        if (PAGE_WRAP(pc, cpu->addr)) {
+            cpu->extra_clocks++;
         }
         cpu->pc = cpu->addr;
     }

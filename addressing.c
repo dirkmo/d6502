@@ -49,6 +49,9 @@ void IndirectY(d6502_t *cpu) {
     uint8_t addr = zp_addr; // using uint8 for zeropage-wrap-around
     cpu->addr = cpu->read(addr++);
     cpu->addr |= ((uint16_t)cpu->read(addr)) << 8;
+    if (PAGE_WRAP(cpu->addr, cpu->addr + cpu->y)) {
+        cpu->extra_clocks++;
+    }
     cpu->addr += cpu->y;
     sprintf(cpu->disassemble, "($%02X),Y", zp_addr);
 }

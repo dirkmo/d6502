@@ -3,3 +3,6 @@
 test.bin
 dnes
 rom/*.nes
+sim
+*.map
+*.lst
