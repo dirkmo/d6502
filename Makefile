@@ -6,7 +6,7 @@ INC=
 SRCS=addressing.c d6502.c instruction_table.c operations.c
 OBJS=$(SRCS:.c=.o)
 
-all: sim
+all: lib
 
 lib: d6502.a
 
