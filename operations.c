@@ -35,9 +35,7 @@ static void branch_on_condition(d6502_t *cpu, bool condition) {
     if (condition) {
         cpu->extra_clocks++;
         const uint16_t pc = cpu->pc + cpu->instruction->len;
-        if (PAGE_WRAP(pc, cpu->addr)) {
-            cpu->extra_clocks++;
-        }
+        cpu->extra_clocks += PAGE_WRAP(pc, cpu->addr);
         cpu->pc = cpu->addr;
     }
 }
@@ -366,6 +364,10 @@ void SEI(d6502_t *cpu) { // Set interrupt disable status
 
 void STA(d6502_t *cpu) { // Store accumulator in memory
     cpu->write(cpu->addr, cpu->a);
+    if (cpu->extra_clocks > 0) {
+        // STA never has extra clock cycles due to page crossing
+        cpu->extra_clocks--;
+    }
 }
 
 void STX(d6502_t *cpu) { // Store index X in memory

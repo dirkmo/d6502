@@ -1,6 +1,10 @@
 # d6502
 6502 CPU emulation. Used in my NES emulator [DNES](https://github.com/dirkmo/dnes).
 
+Regular instructions are implemented cycle exact. Some illegal instructions are implemented.
+
+The core has been verified with the nestest rom from the [NesDev WIKI](https://wiki.nesdev.com/w/index.php/Emulator_tests). It matches up to line 5851 of the nestest log (test of illegal instruction DCP).
+
 ## How to use
 See comments in the code below.
 

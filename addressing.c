@@ -49,9 +49,7 @@ void IndirectY(d6502_t *cpu) {
     uint8_t addr = zp_addr; // using uint8 for zeropage-wrap-around
     cpu->addr = cpu->read(addr++);
     cpu->addr |= ((uint16_t)cpu->read(addr)) << 8;
-    if (PAGE_WRAP(cpu->addr, cpu->addr + cpu->y)) {
-        cpu->extra_clocks++;
-    }
+    cpu->extra_clocks += PAGE_WRAP(cpu->addr, cpu->addr + cpu->y);
     cpu->addr += cpu->y;
     sprintf(cpu->disassemble, "($%02X),Y", zp_addr);
 }
@@ -80,6 +78,7 @@ void AbsoluteX(d6502_t *cpu) {
     // LDA $1234, X
     uint16_t a1 = immediate16(cpu);
     cpu->addr = a1 + cpu->x;
+    cpu->extra_clocks += PAGE_WRAP(a1, cpu->addr);
     sprintf(cpu->disassemble, "$%04X,X", a1);
 }
 
@@ -87,6 +86,7 @@ void AbsoluteY(d6502_t *cpu) {
     // LDA $1234, Y
     uint16_t a1 = immediate16(cpu);
     cpu->addr = a1 + cpu->y;
+    cpu->extra_clocks += PAGE_WRAP(a1, cpu->addr);
     sprintf(cpu->disassemble, "$%04X,Y", a1);
 }
 
